@@ -1,0 +1,317 @@
+//// ------------------------------------------------------
+//// THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+//// ------------------------------------------------------
+
+Table users {
+  id String [pk]
+  email String [unique, not null]
+  username String [unique]
+  firstName String
+  lastName String
+  phone String
+  avatar String
+  role UserRole [not null, default: 'USER']
+  status UserStatus [not null, default: 'ACTIVE']
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  profile user_profiles
+  sessions user_sessions [not null]
+  activities user_activities [not null]
+  createdOrders orders [not null]
+  assignedTasks tasks [not null]
+}
+
+Table user_profiles {
+  id String [pk]
+  userId String [unique, not null]
+  dateOfBirth DateTime
+  address String
+  city String
+  state String
+  country String
+  zipCode String
+  bio String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  user users [not null]
+}
+
+Table user_sessions {
+  id String [pk]
+  userId String [not null]
+  token String [unique, not null]
+  expiresAt DateTime [not null]
+  ipAddress String
+  userAgent String
+  createdAt DateTime [default: `now()`, not null]
+  user users [not null]
+}
+
+Table user_activities {
+  id String [pk]
+  userId String [not null]
+  action String [not null]
+  resource String
+  resourceId String
+  metadata Json
+  ipAddress String
+  userAgent String
+  createdAt DateTime [default: `now()`, not null]
+  user users [not null]
+}
+
+Table customers {
+  id String [pk]
+  companyName String
+  contactName String [not null]
+  email String [unique, not null]
+  phone String
+  address String
+  city String
+  state String
+  country String
+  zipCode String
+  status CustomerStatus [not null, default: 'ACTIVE']
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  orders orders [not null]
+}
+
+Table products {
+  id String [pk]
+  name String [not null]
+  description String
+  sku String [unique, not null]
+  barcode String [unique]
+  category String [not null]
+  price Decimal [not null]
+  costPrice Decimal
+  stock Int [not null, default: 0]
+  minStock Int [not null, default: 0]
+  maxStock Int
+  status ProductStatus [not null, default: 'ACTIVE']
+  images String[] [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  orderItems order_items [not null]
+  stockMovements stock_movements [not null]
+}
+
+Table orders {
+  id String [pk]
+  orderNumber String [unique, not null]
+  customerId String [not null]
+  createdById String [not null]
+  status OrderStatus [not null, default: 'PENDING']
+  paymentStatus PaymentStatus [not null, default: 'PENDING']
+  paymentMethod PaymentMethod
+  subtotal Decimal [not null]
+  taxAmount Decimal [not null, default: 0]
+  discountAmount Decimal [not null, default: 0]
+  totalAmount Decimal [not null]
+  notes String
+  orderDate DateTime [default: `now()`, not null]
+  requiredDate DateTime
+  shippedDate DateTime
+  deliveredDate DateTime
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  customer customers [not null]
+  createdBy users [not null]
+  items order_items [not null]
+  payments payments [not null]
+}
+
+Table order_items {
+  id String [pk]
+  orderId String [not null]
+  productId String [not null]
+  quantity Int [not null]
+  unitPrice Decimal [not null]
+  totalPrice Decimal [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  order orders [not null]
+  product products [not null]
+
+  indexes {
+    (orderId, productId) [unique]
+  }
+}
+
+Table payments {
+  id String [pk]
+  orderId String [not null]
+  paymentMethod PaymentMethod [not null]
+  status PaymentStatus [not null, default: 'PENDING']
+  amount Decimal [not null]
+  transactionId String [unique]
+  reference String
+  notes String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  order orders [not null]
+}
+
+Table stock_movements {
+  id String [pk]
+  productId String [not null]
+  type StockMovementType [not null]
+  quantity Int [not null]
+  reason String
+  reference String
+  createdAt DateTime [default: `now()`, not null]
+  product products [not null]
+}
+
+Table projects {
+  id String [pk]
+  name String [not null]
+  description String
+  status ProjectStatus [not null, default: 'ACTIVE']
+  priority Priority [not null, default: 'MEDIUM']
+  startDate DateTime
+  endDate DateTime
+  budget Decimal
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  tasks tasks [not null]
+}
+
+Table tasks {
+  id String [pk]
+  projectId String
+  assignedId String
+  title String [not null]
+  description String
+  status TaskStatus [not null, default: 'TODO']
+  priority Priority [not null, default: 'MEDIUM']
+  dueDate DateTime
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  project projects
+  assignedTo users
+}
+
+Table system_configs {
+  id String [pk]
+  key String [unique, not null]
+  value Json [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table audit_logs {
+  id String [pk]
+  userId String
+  action String [not null]
+  resource String [not null]
+  resourceId String
+  oldData Json
+  newData Json
+  ipAddress String
+  userAgent String
+  createdAt DateTime [default: `now()`, not null]
+}
+
+Enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  USER
+}
+
+Enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+}
+
+Enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+Enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  DISCONTINUED
+}
+
+Enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+Enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+Enum PaymentMethod {
+  CREDIT_CARD
+  DEBIT_CARD
+  BANK_TRANSFER
+  CASH
+  DIGITAL_WALLET
+}
+
+Enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+Enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  ON_HOLD
+}
+
+Enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  COMPLETED
+  CANCELLED
+}
+
+Enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+Ref: user_profiles.userId - users.id [delete: Cascade]
+
+Ref: user_sessions.userId > users.id [delete: Cascade]
+
+Ref: user_activities.userId > users.id [delete: Cascade]
+
+Ref: orders.customerId > customers.id
+
+Ref: orders.createdById > users.id
+
+Ref: order_items.orderId > orders.id [delete: Cascade]
+
+Ref: order_items.productId > products.id
+
+Ref: payments.orderId > orders.id
+
+Ref: stock_movements.productId > products.id
+
+Ref: tasks.projectId > projects.id
+
+Ref: tasks.assignedId > users.id
