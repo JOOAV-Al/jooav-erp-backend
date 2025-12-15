@@ -1,0 +1,444 @@
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { UserRole, UserStatus, User } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
+
+import { PrismaService } from '../../database/prisma.service';
+import { AuditLogService } from '../../common/services/audit-log.service';
+import { JwtPayload } from './strategies/jwt.strategy';
+import {
+  LoginDto,
+  RegisterDto,
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+} from './dto/auth.dto';
+import {
+  AuthResponseDto,
+  UserProfileDto,
+  TokenValidationDto,
+} from './dto/auth-response.dto';
+
+@Injectable()
+export class AuthService {
+  private readonly jwtSecret: string;
+  private readonly jwtExpiresIn: string;
+  private readonly bcryptRounds: number;
+  private readonly blacklistedTokens = new Set<string>();
+
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+    private configService: ConfigService,
+    private auditLogService: AuditLogService,
+  ) {
+    this.jwtSecret =
+      this.configService.get('security.jwtSecret') || 'your-secret-key';
+    this.jwtExpiresIn =
+      this.configService.get('security.jwtExpiresIn') || '15m';
+    this.bcryptRounds = this.configService.get('security.bcryptRounds') || 12;
+  }
+
+  // ================================
+  // AUTHENTICATION METHODS
+  // ================================
+
+  /**
+   * Validate user credentials for login
+   */
+  async validateUser(email: string, password: string): Promise<User | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      include: { profile: true },
+    });
+
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      return null;
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return null;
+    }
+
+    // Update last login
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() },
+    });
+
+    return user;
+  }
+
+  /**
+   * Validate user by ID (for JWT strategy)
+   */
+  async validateUserById(id: string): Promise<User | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: { profile: true },
+    });
+
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      return null;
+    }
+
+    return user;
+  }
+
+  /**
+   * Login user and return tokens
+   */
+  async login(loginDto: LoginDto, request?: any): Promise<AuthResponseDto> {
+    const user = await this.validateUser(loginDto.email, loginDto.password);
+
+    if (!user) {
+      // Log failed login attempt
+      await this.auditLogService.logAuthEvent(
+        'unknown',
+        'LOGIN_FAILED',
+        request,
+        { email: loginDto.email, reason: 'Invalid credentials' },
+      );
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const tokens = await this.generateTokens(user);
+
+    // Create user session
+    await this.createUserSession(user.id, tokens.refreshToken, request);
+
+    // Log successful login
+    await this.auditLogService.logAuthEvent(user.id, 'LOGIN', request, {
+      email: user.email,
+    });
+
+    return {
+      ...tokens,
+      user: this.transformUserToProfile(user),
+    };
+  }
+
+  /**
+   * Register new user
+   */
+  async register(
+    registerDto: RegisterDto,
+    request?: any,
+  ): Promise<AuthResponseDto> {
+    // Check if user already exists
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: registerDto.email.toLowerCase() },
+          ...(registerDto.username ? [{ username: registerDto.username }] : []),
+        ],
+      },
+    });
+
+    if (existingUser) {
+      const field =
+        existingUser.email === registerDto.email.toLowerCase()
+          ? 'email'
+          : 'username';
+      throw new ConflictException(`User with this ${field} already exists`);
+    }
+
+    // Hash password
+    const hashedPassword = await this.hashPassword(registerDto.password);
+
+    // Create user
+    const user = await this.prisma.user.create({
+      data: {
+        email: registerDto.email.toLowerCase(),
+        username: registerDto.username?.toLowerCase(),
+        password: hashedPassword,
+        firstName: registerDto.firstName,
+        lastName: registerDto.lastName,
+        phone: registerDto.phone,
+        role: UserRole.USER, // Default role
+        status: UserStatus.ACTIVE,
+        profile: {
+          create: {
+            // Initialize empty profile
+          },
+        },
+      },
+      include: { profile: true },
+    });
+
+    const tokens = await this.generateTokens(user);
+
+    // Create user session
+    await this.createUserSession(user.id, tokens.refreshToken, request);
+
+    // Log registration
+    await this.auditLogService.logAuthEvent(user.id, 'REGISTER', request, {
+      email: user.email,
+    });
+
+    return {
+      ...tokens,
+      user: this.transformUserToProfile(user),
+    };
+  }
+
+  /**
+   * Refresh access token
+   */
+  async refreshToken(
+    refreshToken: string,
+    request?: any,
+  ): Promise<AuthResponseDto> {
+    try {
+      const payload = this.jwtService.verify(refreshToken, {
+        secret: this.jwtSecret,
+      });
+
+      const user = await this.validateUserById(payload.sub);
+      if (!user) {
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
+      // Verify session exists
+      const session = await this.prisma.userSession.findFirst({
+        where: {
+          userId: user.id,
+          token: refreshToken,
+          expiresAt: { gt: new Date() },
+        },
+      });
+
+      if (!session) {
+        throw new UnauthorizedException('Invalid or expired refresh token');
+      }
+
+      const tokens = await this.generateTokens(user);
+
+      // Update session with new refresh token
+      await this.prisma.userSession.update({
+        where: { id: session.id },
+        data: {
+          token: tokens.refreshToken,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        },
+      });
+
+      return {
+        ...tokens,
+        user: this.transformUserToProfile(user),
+      };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+  }
+
+  /**
+   * Logout user and invalidate tokens
+   */
+  async logout(userId: string, tokenId?: string, request?: any): Promise<void> {
+    // Invalidate all user sessions
+    await this.prisma.userSession.deleteMany({
+      where: { userId },
+    });
+
+    // Add token to blacklist if provided
+    if (tokenId) {
+      this.blacklistedTokens.add(tokenId);
+    }
+
+    // Log logout
+    await this.auditLogService.logAuthEvent(userId, 'LOGOUT', request);
+  }
+
+  /**
+   * Change user password
+   */
+  async changePassword(
+    userId: string,
+    changePasswordDto: ChangePasswordDto,
+    request?: any,
+  ): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(
+      changePasswordDto.currentPassword,
+      user.password,
+    );
+
+    if (!isCurrentPasswordValid) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+
+    // Hash new password
+    const hashedPassword = await this.hashPassword(
+      changePasswordDto.newPassword,
+    );
+
+    // Update password
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedPassword,
+        passwordChangedAt: new Date(),
+      },
+    });
+
+    // Invalidate all user sessions (force re-login)
+    await this.prisma.userSession.deleteMany({
+      where: { userId },
+    });
+
+    // Log password change
+    await this.auditLogService.logAuthEvent(
+      userId,
+      'PASSWORD_CHANGED',
+      request,
+    );
+  }
+
+  // ================================
+  // UTILITY METHODS
+  // ================================
+
+  /**
+   * Generate JWT tokens for user
+   */
+  private async generateTokens(user: User): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+    tokenType: string;
+  }> {
+    const jwtId = uuidv4();
+
+    const payload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    };
+
+    const accessToken = this.jwtService.sign(payload as any);
+
+    const refreshToken = this.jwtService.sign({
+      sub: user.id,
+      tokenType: 'refresh',
+    } as any);
+
+    return {
+      accessToken,
+      refreshToken,
+      expiresIn: 86400, // 24 hours in seconds
+      tokenType: 'Bearer',
+    };
+  }
+
+  /**
+   * Hash password using bcrypt
+   */
+  private async hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, this.bcryptRounds);
+  }
+
+  /**
+   * Transform user entity to profile DTO
+   */
+  private transformUserToProfile(user: User): UserProfileDto {
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword as UserProfileDto;
+  }
+
+  /**
+   * Create user session
+   */
+  private async createUserSession(
+    userId: string,
+    refreshToken: string,
+    request?: any,
+  ): Promise<void> {
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    await this.prisma.userSession.create({
+      data: {
+        userId,
+        token: refreshToken,
+        expiresAt,
+        ipAddress: request?.ip,
+        userAgent: request?.get('User-Agent'),
+      },
+    });
+  }
+
+  /**
+   * Check if token is blacklisted
+   */
+  async isTokenBlacklisted(tokenId: string): Promise<boolean> {
+    return this.blacklistedTokens.has(tokenId);
+  }
+
+  /**
+   * Validate token and return user info
+   */
+  async validateToken(token: string): Promise<TokenValidationDto> {
+    try {
+      const payload = this.jwtService.verify(token, {
+        secret: this.jwtSecret,
+      });
+
+      // Check if token is blacklisted
+      if (payload.jti && this.blacklistedTokens.has(payload.jti)) {
+        return { valid: false };
+      }
+
+      const user = await this.validateUserById(payload.sub);
+      if (!user) {
+        return { valid: false };
+      }
+
+      return {
+        valid: true,
+        user: this.transformUserToProfile(user),
+        expiresAt: new Date(payload.exp * 1000),
+      };
+    } catch (error) {
+      return { valid: false };
+    }
+  }
+
+  /**
+   * Get user sessions
+   */
+  async getUserSessions(userId: string) {
+    return this.prisma.userSession.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Revoke specific session
+   */
+  async revokeSession(userId: string, sessionId: string): Promise<void> {
+    await this.prisma.userSession.deleteMany({
+      where: {
+        id: sessionId,
+        userId,
+      },
+    });
+  }
+}

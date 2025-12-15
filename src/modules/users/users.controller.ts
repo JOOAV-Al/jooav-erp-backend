@@ -1,0 +1,337 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+  Request,
+  ParseEnumPipe,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiBody,
+  ApiQuery,
+  ApiParam,
+} from '@nestjs/swagger';
+import { UserRole, UserStatus } from '@prisma/client';
+
+import { UsersService } from './users.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import {
+  CurrentUser,
+  CurrentUserId,
+} from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { AuditLog } from '../../common/decorators/audit-log.decorator';
+import { PaginationDto, PaginatedResponse } from '../../common/dto';
+import {
+  CreateUserDto,
+  UpdateUserDto,
+  UpdateUserStatusDto,
+  UpdateUserRoleDto,
+  UpdateUserProfileDto,
+} from './dto/user.dto';
+import { UserProfileDto } from '../auth/dto/auth-response.dto';
+
+@ApiTags('Users')
+@Controller('users')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth('access-token')
+export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+
+  // ================================
+  // USER MANAGEMENT (ADMIN ONLY)
+  // ================================
+
+  @Get()
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Get all users with pagination and filters (Admin only)',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'role', required: false, enum: UserRole })
+  @ApiQuery({ name: 'status', required: false, enum: UserStatus })
+  @ApiResponse({
+    status: 200,
+    description: 'Users retrieved successfully',
+    type: PaginatedResponse<UserProfileDto>,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  async findAll(
+    @Query() paginationDto: PaginationDto,
+    @Query('role') role?: UserRole,
+    @Query('status') status?: UserStatus,
+  ): Promise<PaginatedResponse<UserProfileDto>> {
+    return this.usersService.findAll(paginationDto, { role, status });
+  }
+
+  @Get('stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Get user statistics (Admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'User statistics retrieved successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  async getUserStats() {
+    return this.usersService.getUserStats();
+  }
+
+  @Post()
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Create new user (Admin only)' })
+  @ApiBody({ type: CreateUserDto })
+  @ApiResponse({
+    status: 201,
+    description: 'User created successfully',
+    type: UserProfileDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid user data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @ApiResponse({ status: 409, description: 'User already exists' })
+  @AuditLog({
+    action: 'CREATE_USER',
+    resource: 'USER',
+    includeRequestBody: true,
+  })
+  async create(
+    @Body() createUserDto: CreateUserDto,
+    @CurrentUserId() currentUserId: string,
+    @Request() req: any,
+  ): Promise<UserProfileDto> {
+    return this.usersService.create(createUserDto, currentUserId, req);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get user by ID' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'User retrieved successfully',
+    type: UserProfileDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async findOne(@Param('id') id: string): Promise<UserProfileDto> {
+    return this.usersService.findOne(id);
+  }
+
+  @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Update user information (Admin only)' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @ApiBody({ type: UpdateUserDto })
+  @ApiResponse({
+    status: 200,
+    description: 'User updated successfully',
+    type: UserProfileDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid user data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 409, description: 'Username already taken' })
+  @AuditLog({
+    action: 'UPDATE_USER',
+    resource: 'USER',
+    includeRequestBody: true,
+  })
+  async update(
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @CurrentUserId() currentUserId: string,
+    @Request() req: any,
+  ): Promise<UserProfileDto> {
+    return this.usersService.update(id, updateUserDto, currentUserId, req);
+  }
+
+  @Patch(':id/status')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Update user status (Admin only)' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @ApiBody({ type: UpdateUserStatusDto })
+  @ApiResponse({
+    status: 200,
+    description: 'User status updated successfully',
+    type: UserProfileDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @AuditLog({
+    action: 'UPDATE_USER_STATUS',
+    resource: 'USER',
+    includeRequestBody: true,
+  })
+  async updateStatus(
+    @Param('id') id: string,
+    @Body() updateStatusDto: UpdateUserStatusDto,
+    @CurrentUserId() currentUserId: string,
+    @Request() req: any,
+  ): Promise<UserProfileDto> {
+    return this.usersService.updateStatus(
+      id,
+      updateStatusDto,
+      currentUserId,
+      req,
+    );
+  }
+
+  @Patch(':id/role')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN) // Only super admin can change roles
+  @ApiOperation({ summary: 'Update user role (Super Admin only)' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @ApiBody({ type: UpdateUserRoleDto })
+  @ApiResponse({
+    status: 200,
+    description: 'User role updated successfully',
+    type: UserProfileDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Super Admin access required',
+  })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @AuditLog({
+    action: 'UPDATE_USER_ROLE',
+    resource: 'USER',
+    includeRequestBody: true,
+  })
+  async updateRole(
+    @Param('id') id: string,
+    @Body() updateRoleDto: UpdateUserRoleDto,
+    @CurrentUserId() currentUserId: string,
+    @Request() req: any,
+  ): Promise<UserProfileDto> {
+    return this.usersService.updateRole(id, updateRoleDto, currentUserId, req);
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN) // Only super admin can delete users
+  @ApiOperation({ summary: 'Soft delete user (Super Admin only)' })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @ApiResponse({ status: 200, description: 'User deleted successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Super Admin access required',
+  })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @AuditLog({
+    action: 'DELETE_USER',
+    resource: 'USER',
+  })
+  async remove(
+    @Param('id') id: string,
+    @CurrentUserId() currentUserId: string,
+    @Request() req: any,
+  ): Promise<{ message: string }> {
+    await this.usersService.remove(id, currentUserId, req);
+    return { message: 'User deleted successfully' };
+  }
+
+  // ================================
+  // PROFILE MANAGEMENT (SELF)
+  // ================================
+
+  @Get('me/profile')
+  @ApiOperation({ summary: 'Get own profile' })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile retrieved successfully',
+    type: UserProfileDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getMyProfile(@CurrentUserId() userId: string): Promise<UserProfileDto> {
+    return this.usersService.findOne(userId);
+  }
+
+  @Patch('me/profile')
+  @ApiOperation({ summary: 'Update own profile' })
+  @ApiBody({ type: UpdateUserDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile updated successfully',
+    type: UserProfileDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid profile data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 409, description: 'Username already taken' })
+  @AuditLog({
+    action: 'UPDATE_OWN_PROFILE',
+    resource: 'USER',
+    includeRequestBody: true,
+  })
+  async updateMyProfile(
+    @CurrentUserId() userId: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @Request() req: any,
+  ): Promise<UserProfileDto> {
+    return this.usersService.update(userId, updateUserDto, userId, req);
+  }
+
+  @Patch('me/profile/details')
+  @ApiOperation({ summary: 'Update own profile details (address, bio, etc.)' })
+  @ApiBody({ type: UpdateUserProfileDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile details updated successfully',
+    type: UserProfileDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid profile data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @AuditLog({
+    action: 'UPDATE_PROFILE_DETAILS',
+    resource: 'USER',
+    includeRequestBody: true,
+  })
+  async updateMyProfileDetails(
+    @CurrentUserId() userId: string,
+    @Body() updateProfileDto: UpdateUserProfileDto,
+    @Request() req: any,
+  ): Promise<UserProfileDto> {
+    return this.usersService.updateProfile(
+      userId,
+      updateProfileDto,
+      userId,
+      req,
+    );
+  }
+}

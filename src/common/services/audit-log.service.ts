@@ -125,7 +125,12 @@ export class AuditLogService {
    */
   async logAuthEvent(
     userId: string,
-    action: 'LOGIN' | 'LOGOUT' | 'LOGIN_FAILED' | 'PASSWORD_CHANGED',
+    action:
+      | 'LOGIN'
+      | 'LOGOUT'
+      | 'LOGIN_FAILED'
+      | 'PASSWORD_CHANGED'
+      | 'REGISTER',
     req?: any,
     metadata?: any,
   ): Promise<void> {
