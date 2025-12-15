@@ -26,6 +26,9 @@ import { AuditLogService } from './common/services/audit-log.service';
 
 // Modules
 import { UploadModule } from './modules/upload.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
+import { PrismaModule } from './modules/prisma/prisma.module';
 import { SentryModule } from '@sentry/nestjs/setup';
 
 @Module({
@@ -68,6 +71,9 @@ import { SentryModule } from '@sentry/nestjs/setup';
     TerminusModule,
 
     // Feature modules
+    PrismaModule,
+    AuthModule,
+    UsersModule,
     UploadModule,
   ],
   controllers: [AppController, HealthController],

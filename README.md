@@ -96,6 +96,218 @@ yarn db:seed
 yarn db:studio
 ```
 
+## 🔐 Authentication System
+
+Our comprehensive authentication system provides enterprise-grade security with JWT tokens, role-based access control, and session management.
+
+### Features
+
+- **JWT Authentication**: Access and refresh token system
+- **Role-Based Access Control (RBAC)**: Multi-level user roles
+- **Session Management**: Track and manage user sessions
+- **Password Security**: Argon2 hashing with configurable rounds
+- **Account Management**: Registration, login, password changes
+- **Audit Logging**: Complete authentication event logging
+- **Security Guards**: Route protection with role validation
+
+### User Roles
+
+- **SUPER_ADMIN**: Full system access and user management
+- **ADMIN**: Administrative access with user management
+- **MANAGER**: Management-level access to business functions
+- **EMPLOYEE**: Standard user access to assigned functions
+- **VIEWER**: Read-only access to authorized data
+
+### Authentication Endpoints
+
+#### Public Endpoints
+
+```bash
+# User Registration
+POST /api/v1/auth/register
+{
+  "email": "user@example.com",
+  "password": "securePassword123",
+  "firstName": "John",
+  "lastName": "Doe"
+}
+
+# User Login
+POST /api/v1/auth/login
+{
+  "email": "user@example.com",
+  "password": "securePassword123"
+}
+
+# Refresh Access Token
+POST /api/v1/auth/refresh
+{
+  "refreshToken": "your-refresh-token"
+}
+
+# Forgot Password
+POST /api/v1/auth/forgot-password
+{
+  "email": "user@example.com"
+}
+
+# Reset Password
+POST /api/v1/auth/reset-password
+{
+  "token": "reset-token",
+  "newPassword": "newSecurePassword123"
+}
+```
+
+#### Protected Endpoints
+
+```bash
+# Get User Profile
+GET /api/v1/auth/profile
+Authorization: Bearer <access-token>
+
+# Change Password
+POST /api/v1/auth/change-password
+Authorization: Bearer <access-token>
+{
+  "currentPassword": "currentPassword",
+  "newPassword": "newSecurePassword123"
+}
+
+# Get User Sessions
+GET /api/v1/auth/sessions
+Authorization: Bearer <access-token>
+
+# Logout Current Session
+POST /api/v1/auth/logout
+Authorization: Bearer <access-token>
+
+# Logout All Sessions
+POST /api/v1/auth/logout-all
+Authorization: Bearer <access-token>
+```
+
+### User Management Endpoints
+
+#### Admin Only Endpoints
+
+```bash
+# Get All Users (with pagination and filters)
+GET /api/v1/users?page=1&limit=10&role=EMPLOYEE&status=ACTIVE
+Authorization: Bearer <admin-token>
+
+# Get User Statistics
+GET /api/v1/users/stats
+Authorization: Bearer <admin-token>
+
+# Create New User
+POST /api/v1/users
+Authorization: Bearer <admin-token>
+{
+  "email": "newuser@example.com",
+  "firstName": "Jane",
+  "lastName": "Smith",
+  "role": "EMPLOYEE",
+  "generatePassword": true
+}
+
+# Update User
+PATCH /api/v1/users/:id
+Authorization: Bearer <admin-token>
+
+# Update User Status
+PATCH /api/v1/users/:id/status
+Authorization: Bearer <admin-token>
+{
+  "status": "INACTIVE"
+}
+
+# Update User Role (Super Admin only)
+PATCH /api/v1/users/:id/role
+Authorization: Bearer <super-admin-token>
+{
+  "role": "MANAGER"
+}
+
+# Delete User (Super Admin only)
+DELETE /api/v1/users/:id
+Authorization: Bearer <super-admin-token>
+```
+
+#### Self-Service Endpoints
+
+```bash
+# Get Own Profile
+GET /api/v1/users/me/profile
+Authorization: Bearer <access-token>
+
+# Update Own Profile
+PATCH /api/v1/users/me/profile
+Authorization: Bearer <access-token>
+{
+  "firstName": "UpdatedName",
+  "bio": "Updated bio"
+}
+
+# Update Profile Details
+PATCH /api/v1/users/me/profile/details
+Authorization: Bearer <access-token>
+{
+  "bio": "Software Developer",
+  "phoneNumber": "+1234567890",
+  "address": "123 Main St",
+  "city": "New York",
+  "country": "USA"
+}
+```
+
+### Default Users
+
+After running the seed script, the following test users are available:
+
+| Email             | Password    | Role        | Description          |
+| ----------------- | ----------- | ----------- | -------------------- |
+| admin@jooav.com   | password123 | SUPER_ADMIN | System Administrator |
+| manager@jooav.com | password123 | MANAGER     | Operations Manager   |
+
+### Security Configuration
+
+Update your `.env` file with secure values:
+
+```env
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+
+# Password Hashing
+BCRYPT_ROUNDS=12
+
+# Rate Limiting
+THROTTLE_TTL=60000
+THROTTLE_LIMIT=10
+```
+
+### Using Authentication in Your Code
+
+```typescript
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
+import { Roles } from './decorators/roles.decorator';
+import { CurrentUser } from './decorators/current-user.decorator';
+import { UserRole } from '@prisma/client';
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.MANAGER)
+export class ExampleController {
+  @Get('protected')
+  protectedRoute(@CurrentUser() user: User) {
+    return { message: `Hello ${user.firstName}!` };
+  }
+}
+```
+
 ## 🔒 Security Features
 
 - **Helmet**: Security headers configuration

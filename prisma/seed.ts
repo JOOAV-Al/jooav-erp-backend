@@ -13,8 +13,10 @@ async function main() {
       email: 'admin@jooav.com',
       firstName: 'Super',
       lastName: 'Admin',
+      password: '$2b$12$LQv3c1yqBwlVHpPjrCyeNOHNMQBqx83KDQC0xc5L5F1s5W1B5o3gm', // Default: "password123"
       role: UserRole.SUPER_ADMIN,
       status: UserStatus.ACTIVE,
+      emailVerified: true,
       profile: {
         create: {
           bio: 'System Administrator',
@@ -32,8 +34,10 @@ async function main() {
       email: 'manager@jooav.com',
       firstName: 'John',
       lastName: 'Manager',
+      password: '$2b$12$LQv3c1yqBwlVHpPjrCyeNOHNMQBqx83KDQC0xc5L5F1s5W1B5o3gm', // Default: "password123"
       role: UserRole.MANAGER,
       status: UserStatus.ACTIVE,
+      emailVerified: true,
       profile: {
         create: {
           bio: 'Operations Manager',
