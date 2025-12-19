@@ -29,6 +29,7 @@ import { UploadModule } from './modules/upload.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
+import { AdminModule } from './admin/admin.module';
 import { SentryModule } from '@sentry/nestjs/setup';
 
 @Module({
@@ -74,6 +75,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
     PrismaModule,
     AuthModule,
     UsersModule,
+    AdminModule,
     UploadModule,
   ],
   controllers: [AppController, HealthController],

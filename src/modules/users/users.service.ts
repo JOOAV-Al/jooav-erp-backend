@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { UserRole, UserStatus, User } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
+import * as argon2 from 'argon2';
 
 import { PrismaService } from '../../database/prisma.service';
 import { AuditLogService } from '../../common/services/audit-log.service';
@@ -21,7 +21,12 @@ import { UserProfileDto } from '../auth/dto/auth-response.dto';
 
 @Injectable()
 export class UsersService {
-  private readonly bcryptRounds = 12;
+  private readonly argon2Options = {
+    memoryCost: 65536, // 64MB
+    timeCost: 3,
+    parallelism: 1,
+    type: argon2.argon2id,
+  };
 
   constructor(
     private prisma: PrismaService,
@@ -158,9 +163,9 @@ export class UsersService {
 
     // Generate a temporary password
     const temporaryPassword = this.generateTemporaryPassword();
-    const hashedPassword = await bcrypt.hash(
+    const hashedPassword = await argon2.hash(
       temporaryPassword,
-      this.bcryptRounds,
+      this.argon2Options,
     );
 
     // Create user
@@ -438,16 +443,16 @@ export class UsersService {
   }
 
   /**
-   * Soft delete user (set status to inactive)
+   * Soft delete user (set status to deactivated)
    */
   async remove(id: string, deletedBy: string, request?: any): Promise<void> {
     const user = await this.findOne(id);
 
-    // Soft delete by setting status to inactive
+    // Soft delete by setting status to deactivated
     await this.prisma.user.update({
       where: { id },
       data: {
-        status: UserStatus.INACTIVE,
+        status: UserStatus.DEACTIVATED,
         updatedAt: new Date(),
       },
     });
@@ -476,14 +481,14 @@ export class UsersService {
    * Get user statistics
    */
   async getUserStats() {
-    const [totalUsers, activeUsers, inactiveUsers, adminUsers] =
+    const [totalUsers, activeUsers, deactivatedUsers, adminUsers] =
       await Promise.all([
         this.prisma.user.count(),
         this.prisma.user.count({ where: { status: UserStatus.ACTIVE } }),
-        this.prisma.user.count({ where: { status: UserStatus.INACTIVE } }),
+        this.prisma.user.count({ where: { status: UserStatus.DEACTIVATED } }),
         this.prisma.user.count({
           where: {
-            role: { in: [UserRole.ADMIN, UserRole.SUPER_ADMIN] },
+            role: { in: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
           },
         }),
       ]);
@@ -491,7 +496,7 @@ export class UsersService {
     return {
       totalUsers,
       activeUsers,
-      inactiveUsers,
+      deactivatedUsers,
       adminUsers,
       usersByRole: await this.getUsersByRole(),
       recentRegistrations: await this.getRecentRegistrations(),

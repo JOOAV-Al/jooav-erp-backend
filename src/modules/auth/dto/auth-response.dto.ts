@@ -47,7 +47,7 @@ export class UserProfileDto {
   @ApiProperty({
     description: 'User role',
     enum: UserRole,
-    example: UserRole.USER,
+    example: UserRole.SME_USER,
   })
   role: UserRole;
 
