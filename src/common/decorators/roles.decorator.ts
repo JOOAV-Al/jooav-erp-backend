@@ -9,10 +9,8 @@ export const ROLES_KEY = 'roles';
  * @param roles Array of UserRole enum values
  *
  * @example
- * @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
- * @Get('admin-only')
- * adminOnlyEndpoint() {
- *   // This endpoint requires ADMIN or SUPER_ADMIN role
- * }
+ * @Roles(UserRole.ADMIN)
+ * function someEndpoint() {
+ *   // This endpoint requires ADMIN role
  */
 export const Roles = (...roles: UserRole[]) => SetMetadata(ROLES_KEY, roles);

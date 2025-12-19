@@ -39,7 +39,8 @@
     "dev:services:start": "sudo systemctl start postgresql redis-server",
     "dev:services:stop": "sudo systemctl stop postgresql redis-server",
     "typecheck": "tsc --noEmit",
-    "health:check": "curl -f http://localhost:3000/api/v1/health || exit 1"
+    "health:check": "curl -f http://localhost:3000/api/v1/health || exit 1",
+    "admin:seed": "./scripts/seed-admin.sh"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.9",
@@ -87,6 +88,7 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
+    "@types/argon2": "^0.15.4",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.0",

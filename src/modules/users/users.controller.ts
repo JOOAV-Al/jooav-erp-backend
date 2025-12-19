@@ -54,7 +54,7 @@ export class UsersController {
 
   @Get()
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @ApiOperation({
     summary: 'Get all users with pagination and filters (Admin only)',
   })
@@ -83,7 +83,7 @@ export class UsersController {
 
   @Get('stats')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @ApiOperation({ summary: 'Get user statistics (Admin only)' })
   @ApiResponse({
     status: 200,
@@ -100,7 +100,7 @@ export class UsersController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @ApiOperation({ summary: 'Create new user (Admin only)' })
   @ApiBody({ type: CreateUserDto })
   @ApiResponse({
@@ -144,7 +144,7 @@ export class UsersController {
 
   @Patch(':id')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update user information (Admin only)' })
   @ApiParam({ name: 'id', description: 'User ID' })
   @ApiBody({ type: UpdateUserDto })
@@ -177,7 +177,7 @@ export class UsersController {
 
   @Patch(':id/status')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update user status (Admin only)' })
   @ApiParam({ name: 'id', description: 'User ID' })
   @ApiBody({ type: UpdateUserStatusDto })
@@ -213,8 +213,8 @@ export class UsersController {
 
   @Patch(':id/role')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN) // Only super admin can change roles
-  @ApiOperation({ summary: 'Update user role (Super Admin only)' })
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN) // Admin roles can change user roles
+  @ApiOperation({ summary: 'Update user role (Admin only)' })
   @ApiParam({ name: 'id', description: 'User ID' })
   @ApiBody({ type: UpdateUserRoleDto })
   @ApiResponse({
@@ -225,7 +225,7 @@ export class UsersController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Super Admin access required',
+    description: 'Forbidden - Admin access required',
   })
   @ApiResponse({ status: 404, description: 'User not found' })
   @AuditLog({
@@ -244,14 +244,14 @@ export class UsersController {
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN) // Only super admin can delete users
-  @ApiOperation({ summary: 'Soft delete user (Super Admin only)' })
+  @Roles(UserRole.SUPER_ADMIN) // Only Super Admin can delete users
+  @ApiOperation({ summary: 'Soft delete user (Admin only)' })
   @ApiParam({ name: 'id', description: 'User ID' })
   @ApiResponse({ status: 200, description: 'User deleted successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Super Admin access required',
+    description: 'Forbidden - Admin access required',
   })
   @ApiResponse({ status: 404, description: 'User not found' })
   @AuditLog({

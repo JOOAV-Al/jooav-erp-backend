@@ -8,7 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole, UserStatus, User } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
+import * as argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
 
 import { PrismaService } from '../../database/prisma.service';
@@ -31,7 +31,12 @@ import {
 export class AuthService {
   private readonly jwtSecret: string;
   private readonly jwtExpiresIn: string;
-  private readonly bcryptRounds: number;
+  private readonly argon2Options = {
+    memoryCost: 65536, // 64MB
+    timeCost: 3,
+    parallelism: 1,
+    type: argon2.argon2id,
+  };
   private readonly blacklistedTokens = new Set<string>();
 
   constructor(
@@ -44,7 +49,6 @@ export class AuthService {
       this.configService.get('security.jwtSecret') || 'your-secret-key';
     this.jwtExpiresIn =
       this.configService.get('security.jwtExpiresIn') || '15m';
-    this.bcryptRounds = this.configService.get('security.bcryptRounds') || 12;
   }
 
   // ================================
@@ -64,7 +68,7 @@ export class AuthService {
       return null;
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await argon2.verify(user.password, password);
     if (!isPasswordValid) {
       return null;
     }
@@ -164,7 +168,7 @@ export class AuthService {
         firstName: registerDto.firstName,
         lastName: registerDto.lastName,
         phone: registerDto.phone,
-        role: UserRole.USER, // Default role
+        role: UserRole.SME_USER, // Default role
         status: UserStatus.ACTIVE,
         profile: {
           create: {
@@ -276,9 +280,9 @@ export class AuthService {
     }
 
     // Verify current password
-    const isCurrentPasswordValid = await bcrypt.compare(
-      changePasswordDto.currentPassword,
+    const isCurrentPasswordValid = await argon2.verify(
       user.password,
+      changePasswordDto.currentPassword,
     );
 
     if (!isCurrentPasswordValid) {
@@ -349,10 +353,10 @@ export class AuthService {
   }
 
   /**
-   * Hash password using bcrypt
+   * Hash password using Argon2
    */
   private async hashPassword(password: string): Promise<string> {
-    return bcrypt.hash(password, this.bcryptRounds);
+    return argon2.hash(password, this.argon2Options);
   }
 
   /**
