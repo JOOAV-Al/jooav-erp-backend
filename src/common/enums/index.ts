@@ -1,15 +1,16 @@
 export enum UserRole {
-  SUPER_ADMIN = 'super_admin',
-  ADMIN = 'admin',
-  MANAGER = 'manager',
-  USER = 'user',
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  ADMIN = 'ADMIN',
+  SUB_ADMIN = 'SUB_ADMIN',
+  SME_USER = 'SME_USER',
 }
 
 export enum UserStatus {
-  ACTIVE = 'active',
-  INACTIVE = 'inactive',
-  SUSPENDED = 'suspended',
-  PENDING = 'pending',
+  ACTIVE = 'ACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  DEACTIVATED = 'DEACTIVATED',
+  BLOCKED = 'BLOCKED',
 }
 
 export enum OrderStatus {

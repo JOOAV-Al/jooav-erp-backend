@@ -1,20 +1,65 @@
 import { PrismaClient, UserRole, UserStatus } from '@prisma/client';
+import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
+
+// Argon2 options - same as auth service
+const argonOptions = {
+  type: argon2.argon2id,
+  memoryCost: 2 ** 16, // 64 MB
+  timeCost: 3,
+  parallelism: 1,
+};
+
+// Hash password using Argon2
+async function hashPassword(password: string): Promise<string> {
+  return argon2.hash(password, argonOptions);
+}
 
 async function main() {
   console.log('🌱 Starting database seeding...');
 
-  // Create super admin user
+  // Create Super Admin user
   const superAdmin = await prisma.user.upsert({
+    where: { email: 'superadmin@jooav.com' },
+    update: {},
+    create: {
+      email: 'superadmin@jooav.com',
+      firstName: 'Super',
+      lastName: 'Admin',
+      password: await hashPassword('password123'), // Argon2 hashed
+      role: UserRole.SUPER_ADMIN,
+      status: UserStatus.ACTIVE,
+      emailVerified: true,
+      profile: {
+        create: {
+          bio: 'Platform Super Administrator',
+          country: 'Nigeria',
+        },
+      },
+      superAdminProfile: {
+        create: {
+          // Super Admin is platform owner - no regional restrictions
+          canManageManufacturers: true,
+          canApproveSMEs: true,
+          canManageSubAdmins: true,
+          canAccessAnalytics: true,
+          canModifySystemConfig: true,
+        },
+      },
+    },
+  });
+
+  // Create admin user
+  const admin = await prisma.user.upsert({
     where: { email: 'admin@jooav.com' },
     update: {},
     create: {
       email: 'admin@jooav.com',
-      firstName: 'Super',
+      firstName: 'Platform',
       lastName: 'Admin',
-      password: '$2b$12$LQv3c1yqBwlVHpPjrCyeNOHNMQBqx83KDQC0xc5L5F1s5W1B5o3gm', // Default: "password123"
-      role: UserRole.SUPER_ADMIN,
+      password: await hashPassword('password123'), // Argon2 hashed
+      role: UserRole.ADMIN,
       status: UserStatus.ACTIVE,
       emailVerified: true,
       profile: {
@@ -23,24 +68,63 @@ async function main() {
           country: 'Nigeria',
         },
       },
+      superAdminProfile: {
+        create: {
+          assignedRegions: ['Lagos', 'Abuja'], // Example regional assignment
+          canManageManufacturers: true,
+          canApproveSMEs: true,
+          canManageSubAdmins: false, // Limited permissions for regular admin
+          canAccessAnalytics: true,
+          canModifySystemConfig: false,
+        },
+      },
     },
   });
 
   // Create sample users
-  const manager = await prisma.user.upsert({
-    where: { email: 'manager@jooav.com' },
+  const subAdmin = await prisma.user.upsert({
+    where: { email: 'subadmin@jooav.com' },
     update: {},
     create: {
-      email: 'manager@jooav.com',
-      firstName: 'John',
-      lastName: 'Manager',
-      password: '$2b$12$LQv3c1yqBwlVHpPjrCyeNOHNMQBqx83KDQC0xc5L5F1s5W1B5o3gm', // Default: "password123"
-      role: UserRole.MANAGER,
+      email: 'subadmin@jooav.com',
+      firstName: 'Regional',
+      lastName: 'Officer',
+      password: await hashPassword('password123'), // Argon2 hashed
+      role: UserRole.SUB_ADMIN,
       status: UserStatus.ACTIVE,
       emailVerified: true,
       profile: {
         create: {
-          bio: 'Operations Manager',
+          bio: 'Regional Procurement Officer',
+          country: 'Nigeria',
+        },
+      },
+      subAdminProfile: {
+        create: {
+          employeeId: 'SUB001',
+          // regionId: undefined, // Optional - can be assigned later for scalability
+          specializations: ['Electronics', 'Industrial Equipment'],
+          maxOrderValue: 50000.0,
+        },
+      },
+    },
+  });
+
+  // Create SME user
+  const smeUser = await prisma.user.upsert({
+    where: { email: 'sme@jooav.com' },
+    update: {},
+    create: {
+      email: 'sme@jooav.com',
+      firstName: 'Small Business',
+      lastName: 'Owner',
+      password: await hashPassword('password123'), // Argon2 hashed
+      role: UserRole.SME_USER,
+      status: UserStatus.ACTIVE,
+      emailVerified: true,
+      profile: {
+        create: {
+          bio: 'Small Business Owner',
           country: 'Nigeria',
         },
       },
@@ -133,13 +217,13 @@ async function main() {
           {
             title: 'Setup Database',
             description: 'Configure and setup the production database',
-            assignedId: manager.id,
+            assignedId: subAdmin.id,
             dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
           },
           {
             title: 'Develop User Interface',
             description: 'Create responsive user interface for the application',
-            assignedId: manager.id,
+            assignedId: subAdmin.id,
             dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
           },
         ],
@@ -175,7 +259,9 @@ async function main() {
 
   console.log('✅ Database seeding completed successfully!');
   console.log('📊 Seeded data:');
-  console.log(`   - ${2} Users (1 Super Admin, 1 Manager)`);
+  console.log(
+    `   - ${4} Users (1 Super Admin, 1 Admin, 1 Sub-Admin, 1 SME User)`,
+  );
   console.log(`   - ${customers.length} Customers`);
   console.log(`   - ${products.length} Products`);
   console.log(`   - ${1} Project with ${2} Tasks`);

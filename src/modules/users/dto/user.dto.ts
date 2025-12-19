@@ -60,7 +60,7 @@ export class CreateUserDto {
   @ApiProperty({
     description: 'User role',
     enum: UserRole,
-    example: UserRole.USER,
+    example: UserRole.SME_USER,
   })
   @IsEnum(UserRole)
   role: UserRole;
@@ -143,7 +143,7 @@ export class UpdateUserRoleDto {
   @ApiProperty({
     description: 'User role',
     enum: UserRole,
-    example: UserRole.USER,
+    example: UserRole.SME_USER,
   })
   @IsEnum(UserRole)
   role: UserRole;

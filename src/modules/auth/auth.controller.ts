@@ -233,7 +233,7 @@ export class AuthController {
 
   @Get('admin/users')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get all users (Admin only)' })
   @ApiResponse({
@@ -255,7 +255,7 @@ export class AuthController {
 
   @Patch('admin/users/:userId/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Update user status (Admin only)' })
   @ApiResponse({ status: 200, description: 'User status updated successfully' })

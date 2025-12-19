@@ -27,7 +27,7 @@ model User {
   lastName  String?
   phone     String?
   avatar    String?
-  role      UserRole @default(USER)
+  role      UserRole @default(SME_USER)
   status    UserStatus @default(ACTIVE)
   emailVerified Boolean @default(false)
   lastLogin     DateTime?
@@ -43,6 +43,11 @@ model User {
   activities UserActivity[]
   createdOrders Order[] @relation("CreatedBy")
   assignedTasks Task[] @relation("AssignedTo")
+  
+  // JooavERP specific relations
+  superAdminProfile SuperAdminProfile?
+  smeProfile        SMEUser?
+  subAdminProfile   SubAdminProfile?
   
   @@map("users")
 }
@@ -160,9 +165,12 @@ model Product {
 model Order {
   id              String      @id @default(cuid())
   orderNumber     String      @unique
-  customerId      String
+  customerId      String?     // Made optional for SME orders
+  smeUserId       String?     // SME who placed the order
+  manufacturerId  String?     // Manufacturer fulfilling the order
+  assignedSubAdminId String?  // Sub-admin handling procurement
   createdById     String
-  status          OrderStatus @default(PENDING)
+  status          OrderStatus @default(PLACED)
   paymentStatus   PaymentStatus @default(PENDING)
   paymentMethod   PaymentMethod?
   subtotal        Decimal     @db.Decimal(10, 2)
@@ -171,9 +179,17 @@ model Order {
   totalAmount     Decimal     @db.Decimal(10, 2)
   notes           String?
   
+  // JooavERP specific fields
+  procurementNotes String?    // Internal procurement notes
+  deliveryAddress  String?    // SME delivery address
+  estimatedDelivery DateTime? // Estimated delivery date
+  trackingNumber   String?    // Logistics tracking
+  
   // Dates
   orderDate       DateTime    @default(now())
   requiredDate    DateTime?
+  acceptedDate    DateTime?   // When manufacturer accepted
+  processingDate  DateTime?   // When processing started
   shippedDate     DateTime?
   deliveredDate   DateTime?
   
@@ -182,10 +198,14 @@ model Order {
   updatedAt DateTime @updatedAt
   
   // Relations
-  customer    Customer @relation(fields: [customerId], references: [id])
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  smeUser     SMEUser? @relation(fields: [smeUserId], references: [id])
+  manufacturer Manufacturer? @relation(fields: [manufacturerId], references: [id])
+  assignedSubAdmin SubAdminProfile? @relation("AssignedSubAdmin", fields: [assignedSubAdminId], references: [id])
   createdBy   User @relation("CreatedBy", fields: [createdById], references: [id])
   items       OrderItem[]
   payments    Payment[]
+  inventoryMovements InventoryMovement[]
   
   @@map("orders")
 }
@@ -326,21 +346,224 @@ model AuditLog {
 }
 
 // ================================
+// JOOAV ERP PLATFORM MODELS
+// ================================
+
+model SuperAdminProfile {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  permissions       Json?     // Granular permissions for platform operations
+  assignedRegions   String[]  // Optional regions this admin manages
+  lastActivity      DateTime?
+  loginAttempts     Int       @default(0)
+  accountLockUntil  DateTime?
+  
+  // Platform management settings
+  canManageManufacturers Boolean @default(true)
+  canApproveSMEs         Boolean @default(true)
+  canManageSubAdmins     Boolean @default(true)
+  canAccessAnalytics     Boolean @default(true)
+  canModifySystemConfig  Boolean @default(false)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("super_admin_profiles")
+}
+
+model Region {
+  id          String @id @default(cuid())
+  name        String @unique
+  code        String @unique // e.g., "NG-LA" for Lagos, Nigeria
+  country     String
+  state       String?
+  isActive    Boolean @default(true)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  manufacturers Manufacturer[]
+  smeUsers      SMEUser[]
+  subAdmins     SubAdminProfile[]
+  
+  @@map("regions")
+}
+
+model Manufacturer {
+  id              String            @id @default(cuid())
+  companyName     String
+  contactEmail    String            @unique
+  contactPhone    String?
+  address         String?
+  regionId        String
+  status          ManufacturerStatus @default(PENDING_APPROVAL)
+  
+  // Business details
+  businessLicense String?
+  taxId          String?
+  products       Json[]           // Product catalog
+  
+  // Partnership details
+  partnershipDate DateTime?
+  contractUrl     String?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  region Region @relation(fields: [regionId], references: [id])
+  orders Order[]
+  
+  @@map("manufacturers")
+}
+
+model SMEUser {
+  id           String     @id @default(cuid())
+  userId       String     @unique
+  businessName String
+  businessType String     // e.g., "Retail", "Wholesale", "Distribution"
+  regionId     String
+  
+  // Business verification
+  businessLicense String?
+  verificationStatus SMEVerificationStatus @default(PENDING)
+  approvedBy     String?   // Admin who approved
+  approvedAt     DateTime?
+  
+  // Business metrics
+  totalOrders    Int @default(0)
+  totalSpent     Decimal @default(0) @db.Decimal(15, 2)
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  region Region @relation(fields: [regionId], references: [id])
+  orders Order[]
+  inventory Inventory[]
+  
+  @@map("sme_users")
+}
+
+model SubAdminProfile {
+  id                String @id @default(cuid())
+  userId            String @unique
+  regionId          String? // Optional - can be assigned by region or order-based
+  employeeId        String @unique
+  
+  // Procurement officer details
+  specializations   String[] // e.g., ["Electronics", "Food & Beverages"]
+  maxOrderValue     Decimal? @db.Decimal(15, 2)
+  
+  // Performance metrics
+  ordersProcessed   Int @default(0)
+  averageProcessingTime Int? // in hours
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  region   Region? @relation(fields: [regionId], references: [id])
+  assignedOrders Order[] @relation("AssignedSubAdmin")
+  
+  @@map("sub_admin_profiles")
+}
+
+model Inventory {
+  id              String         @id @default(cuid())
+  smeUserId       String
+  productName     String
+  productSku      String
+  currentStock    Int            @default(0)
+  minStock        Int            @default(0)
+  maxStock        Int?
+  status          InventoryStatus @default(IN_STOCK)
+  
+  // Auto-calculated fields
+  lastOrderDate   DateTime?
+  lastDeliveryDate DateTime?
+  predictedRunOut DateTime?
+  consumptionRate Decimal?       @db.Decimal(8, 2) // units per day
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  smeUser SMEUser @relation(fields: [smeUserId], references: [id], onDelete: Cascade)
+  movements InventoryMovement[]
+  
+  @@unique([smeUserId, productSku])
+  @@map("inventory")
+}
+
+model InventoryMovement {
+  id           String              @id @default(cuid())
+  inventoryId  String
+  type         InventoryMovementType
+  quantity     Int
+  reason       String?             // e.g., "Delivery", "Sale", "Adjustment"
+  orderId      String?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  
+  // Relations
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  order     Order?    @relation(fields: [orderId], references: [id])
+  
+  @@map("inventory_movements")
+}
+
+model AdminAuditLog {
+  id          String          @id @default(cuid())
+  adminId     String
+  action      AdminAction
+  resource    ResourceType
+  resourceId  String?
+  regionId    String?
+  
+  // Audit details
+  oldData     Json?
+  newData     Json?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  
+  @@map("admin_audit_logs")
+}
+
+// ================================
 // ENUMS
 // ================================
 
 enum UserRole {
-  SUPER_ADMIN
-  ADMIN
-  MANAGER
-  USER
+  SUPER_ADMIN    // Platform owner (Jooav management) - highest level
+  ADMIN          // Regional/operational admin
+  SUB_ADMIN      // Procurement officers (can be regional or order-based)
+  SME_USER       // Small business owners
 }
 
 enum UserStatus {
   ACTIVE
-  INACTIVE
   SUSPENDED
-  PENDING
+  PENDING_APPROVAL
+  DEACTIVATED
+  BLOCKED
 }
 
 enum CustomerStatus {
@@ -356,13 +579,13 @@ enum ProductStatus {
 }
 
 enum OrderStatus {
-  PENDING
-  CONFIRMED
-  PROCESSING
-  SHIPPED
-  DELIVERED
-  CANCELLED
-  REFUNDED
+  PLACED           // SME placed the order
+  ACCEPTED         // Manufacturer accepted the order
+  PROCESSING       // Order being processed/sourced
+  IN_TRANSIT       // Order shipped and in transit
+  DELIVERED        // Order delivered to SME
+  CANCELLED        // Order cancelled
+  REJECTED         // Manufacturer rejected the order
 }
 
 enum PaymentStatus {
@@ -407,4 +630,65 @@ enum Priority {
   MEDIUM
   HIGH
   URGENT
+}
+
+// JooavERP specific enums
+enum ManufacturerStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+enum SMEVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  REQUIRES_ADDITIONAL_INFO
+}
+
+enum InventoryStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  DISCONTINUED
+}
+
+enum InventoryMovementType {
+  INBOUND      // Stock received
+  OUTBOUND     // Stock sold/used
+  ADJUSTMENT   // Manual adjustment
+  DAMAGED      // Damaged goods
+  EXPIRED      // Expired products
+}
+
+enum AdminAction {
+  // Authentication actions
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  TOKEN_REFRESH
+  TOKEN_REFRESH_FAILED
+  
+  // Administrative actions
+  CREATE_MANUFACTURER
+  APPROVE_MANUFACTURER
+  SUSPEND_MANUFACTURER
+  APPROVE_SME
+  REJECT_SME
+  ASSIGN_SUB_ADMIN
+  UPDATE_ORDER_STATUS
+  MANAGE_INVENTORY
+  SYSTEM_CONFIG
+  USER_MANAGEMENT
+}
+
+enum ResourceType {
+  MANUFACTURER
+  SME_USER
+  SUB_ADMIN
+  ORDER
+  INVENTORY
+  REGION
+  SYSTEM_CONFIG
 }
