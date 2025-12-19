@@ -11,7 +11,7 @@ Table users {
   lastName String
   phone String
   avatar String
-  role UserRole [not null, default: 'USER']
+  role UserRole [not null, default: 'SME_USER']
   status UserStatus [not null, default: 'ACTIVE']
   emailVerified Boolean [not null, default: false]
   lastLogin DateTime
@@ -23,6 +23,9 @@ Table users {
   activities user_activities [not null]
   createdOrders orders [not null]
   assignedTasks tasks [not null]
+  superAdminProfile super_admin_profiles
+  smeProfile sme_users
+  subAdminProfile sub_admin_profiles
 }
 
 Table user_profiles {
@@ -104,9 +107,12 @@ Table products {
 Table orders {
   id String [pk]
   orderNumber String [unique, not null]
-  customerId String [not null]
+  customerId String
+  smeUserId String
+  manufacturerId String
+  assignedSubAdminId String
   createdById String [not null]
-  status OrderStatus [not null, default: 'PENDING']
+  status OrderStatus [not null, default: 'PLACED']
   paymentStatus PaymentStatus [not null, default: 'PENDING']
   paymentMethod PaymentMethod
   subtotal Decimal [not null]
@@ -114,16 +120,26 @@ Table orders {
   discountAmount Decimal [not null, default: 0]
   totalAmount Decimal [not null]
   notes String
+  procurementNotes String
+  deliveryAddress String
+  estimatedDelivery DateTime
+  trackingNumber String
   orderDate DateTime [default: `now()`, not null]
   requiredDate DateTime
+  acceptedDate DateTime
+  processingDate DateTime
   shippedDate DateTime
   deliveredDate DateTime
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
-  customer customers [not null]
+  customer customers
+  smeUser sme_users
+  manufacturer manufacturers
+  assignedSubAdmin sub_admin_profiles
   createdBy users [not null]
   items order_items [not null]
   payments payments [not null]
+  inventoryMovements inventory_movements [not null]
 }
 
 Table order_items {
@@ -218,18 +234,156 @@ Table audit_logs {
   createdAt DateTime [default: `now()`, not null]
 }
 
+Table super_admin_profiles {
+  id String [pk]
+  userId String [unique, not null]
+  permissions Json
+  assignedRegions String[] [not null]
+  lastActivity DateTime
+  loginAttempts Int [not null, default: 0]
+  accountLockUntil DateTime
+  canManageManufacturers Boolean [not null, default: true]
+  canApproveSMEs Boolean [not null, default: true]
+  canManageSubAdmins Boolean [not null, default: true]
+  canAccessAnalytics Boolean [not null, default: true]
+  canModifySystemConfig Boolean [not null, default: false]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  user users [not null]
+}
+
+Table regions {
+  id String [pk]
+  name String [unique, not null]
+  code String [unique, not null]
+  country String [not null]
+  state String
+  isActive Boolean [not null, default: true]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  manufacturers manufacturers [not null]
+  smeUsers sme_users [not null]
+  subAdmins sub_admin_profiles [not null]
+}
+
+Table manufacturers {
+  id String [pk]
+  companyName String [not null]
+  contactEmail String [unique, not null]
+  contactPhone String
+  address String
+  regionId String [not null]
+  status ManufacturerStatus [not null, default: 'PENDING_APPROVAL']
+  businessLicense String
+  taxId String
+  products Json[] [not null]
+  partnershipDate DateTime
+  contractUrl String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  region regions [not null]
+  orders orders [not null]
+}
+
+Table sme_users {
+  id String [pk]
+  userId String [unique, not null]
+  businessName String [not null]
+  businessType String [not null]
+  regionId String [not null]
+  businessLicense String
+  verificationStatus SMEVerificationStatus [not null, default: 'PENDING']
+  approvedBy String
+  approvedAt DateTime
+  totalOrders Int [not null, default: 0]
+  totalSpent Decimal [not null, default: 0]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  user users [not null]
+  region regions [not null]
+  orders orders [not null]
+  inventory inventory [not null]
+}
+
+Table sub_admin_profiles {
+  id String [pk]
+  userId String [unique, not null]
+  regionId String
+  employeeId String [unique, not null]
+  specializations String[] [not null]
+  maxOrderValue Decimal
+  ordersProcessed Int [not null, default: 0]
+  averageProcessingTime Int
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  user users [not null]
+  region regions
+  assignedOrders orders [not null]
+}
+
+Table inventory {
+  id String [pk]
+  smeUserId String [not null]
+  productName String [not null]
+  productSku String [not null]
+  currentStock Int [not null, default: 0]
+  minStock Int [not null, default: 0]
+  maxStock Int
+  status InventoryStatus [not null, default: 'IN_STOCK']
+  lastOrderDate DateTime
+  lastDeliveryDate DateTime
+  predictedRunOut DateTime
+  consumptionRate Decimal
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  smeUser sme_users [not null]
+  movements inventory_movements [not null]
+
+  indexes {
+    (smeUserId, productSku) [unique]
+  }
+}
+
+Table inventory_movements {
+  id String [pk]
+  inventoryId String [not null]
+  type InventoryMovementType [not null]
+  quantity Int [not null]
+  reason String
+  orderId String
+  createdAt DateTime [default: `now()`, not null]
+  inventory inventory [not null]
+  order orders
+}
+
+Table admin_audit_logs {
+  id String [pk]
+  adminId String [not null]
+  action AdminAction [not null]
+  resource ResourceType [not null]
+  resourceId String
+  regionId String
+  oldData Json
+  newData Json
+  metadata Json
+  ipAddress String
+  userAgent String
+  createdAt DateTime [default: `now()`, not null]
+}
+
 Enum UserRole {
   SUPER_ADMIN
   ADMIN
-  MANAGER
-  USER
+  SUB_ADMIN
+  SME_USER
 }
 
 Enum UserStatus {
   ACTIVE
-  INACTIVE
   SUSPENDED
-  PENDING
+  PENDING_APPROVAL
+  DEACTIVATED
+  BLOCKED
 }
 
 Enum CustomerStatus {
@@ -245,13 +399,13 @@ Enum ProductStatus {
 }
 
 Enum OrderStatus {
-  PENDING
-  CONFIRMED
+  PLACED
+  ACCEPTED
   PROCESSING
-  SHIPPED
+  IN_TRANSIT
   DELIVERED
   CANCELLED
-  REFUNDED
+  REJECTED
 }
 
 Enum PaymentStatus {
@@ -298,6 +452,63 @@ Enum Priority {
   URGENT
 }
 
+Enum ManufacturerStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+Enum SMEVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  REQUIRES_ADDITIONAL_INFO
+}
+
+Enum InventoryStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  DISCONTINUED
+}
+
+Enum InventoryMovementType {
+  INBOUND
+  OUTBOUND
+  ADJUSTMENT
+  DAMAGED
+  EXPIRED
+}
+
+Enum AdminAction {
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  TOKEN_REFRESH
+  TOKEN_REFRESH_FAILED
+  CREATE_MANUFACTURER
+  APPROVE_MANUFACTURER
+  SUSPEND_MANUFACTURER
+  APPROVE_SME
+  REJECT_SME
+  ASSIGN_SUB_ADMIN
+  UPDATE_ORDER_STATUS
+  MANAGE_INVENTORY
+  SYSTEM_CONFIG
+  USER_MANAGEMENT
+}
+
+Enum ResourceType {
+  MANUFACTURER
+  SME_USER
+  SUB_ADMIN
+  ORDER
+  INVENTORY
+  REGION
+  SYSTEM_CONFIG
+}
+
 Ref: user_profiles.userId - users.id [delete: Cascade]
 
 Ref: user_sessions.userId > users.id [delete: Cascade]
@@ -305,6 +516,12 @@ Ref: user_sessions.userId > users.id [delete: Cascade]
 Ref: user_activities.userId > users.id [delete: Cascade]
 
 Ref: orders.customerId > customers.id
+
+Ref: orders.smeUserId > sme_users.id
+
+Ref: orders.manufacturerId > manufacturers.id
+
+Ref: orders.assignedSubAdminId > sub_admin_profiles.id
 
 Ref: orders.createdById > users.id
 
@@ -319,3 +536,21 @@ Ref: stock_movements.productId > products.id
 Ref: tasks.projectId > projects.id
 
 Ref: tasks.assignedId > users.id
+
+Ref: super_admin_profiles.userId - users.id [delete: Cascade]
+
+Ref: manufacturers.regionId > regions.id
+
+Ref: sme_users.userId - users.id [delete: Cascade]
+
+Ref: sme_users.regionId > regions.id
+
+Ref: sub_admin_profiles.userId - users.id [delete: Cascade]
+
+Ref: sub_admin_profiles.regionId > regions.id
+
+Ref: inventory.smeUserId > sme_users.id [delete: Cascade]
+
+Ref: inventory_movements.inventoryId > inventory.id [delete: Cascade]
+
+Ref: inventory_movements.orderId > orders.id
