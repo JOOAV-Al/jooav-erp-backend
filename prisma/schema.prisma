@@ -692,4 +692,5 @@ enum ResourceType {
   INVENTORY
   REGION
   SYSTEM_CONFIG
+  ADMIN_AUTH
 }

@@ -507,6 +507,7 @@ Enum ResourceType {
   INVENTORY
   REGION
   SYSTEM_CONFIG
+  ADMIN_AUTH
 }
 
 Ref: user_profiles.userId - users.id [delete: Cascade]
