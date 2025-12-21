@@ -96,226 +96,100 @@ yarn db:seed
 yarn db:studio
 ```
 
-## 🔐 Authentication System
-
-Our comprehensive authentication system provides enterprise-grade security with JWT tokens, role-based access control, and session management.
-
-### Features
-
-- **JWT Authentication**: Access and refresh token system
-- **Role-Based Access Control (RBAC)**: Multi-level user roles
-- **Session Management**: Track and manage user sessions
-- **Password Security**: Argon2 hashing with configurable rounds
-- **Account Management**: Registration, login, password changes
-- **Audit Logging**: Complete authentication event logging
-- **Security Guards**: Route protection with role validation
-
-### User Roles
-
-- **SUPER_ADMIN**: Full system access and user management
-- **ADMIN**: Administrative access with user management
-- **MANAGER**: Management-level access to business functions
-- **EMPLOYEE**: Standard user access to assigned functions
-- **VIEWER**: Read-only access to authorized data
-
-### Authentication Endpoints
-
-#### Public Endpoints
-
-```bash
-# User Registration
-POST /api/v1/auth/register
-{
-  "email": "user@example.com",
-  "password": "securePassword123",
-  "firstName": "John",
-  "lastName": "Doe"
-}
-
-# User Login
-POST /api/v1/auth/login
-{
-  "email": "user@example.com",
-  "password": "securePassword123"
-}
-
-# Refresh Access Token
-POST /api/v1/auth/refresh
-{
-  "refreshToken": "your-refresh-token"
-}
-
-# Forgot Password
-POST /api/v1/auth/forgot-password
-{
-  "email": "user@example.com"
-}
-
-# Reset Password
-POST /api/v1/auth/reset-password
-{
-  "token": "reset-token",
-  "newPassword": "newSecurePassword123"
-}
-```
-
-#### Protected Endpoints
-
-```bash
-# Get User Profile
-GET /api/v1/auth/profile
-Authorization: Bearer <access-token>
-
-# Change Password
-POST /api/v1/auth/change-password
-Authorization: Bearer <access-token>
-{
-  "currentPassword": "currentPassword",
-  "newPassword": "newSecurePassword123"
-}
-
-# Get User Sessions
-GET /api/v1/auth/sessions
-Authorization: Bearer <access-token>
-
-# Logout Current Session
-POST /api/v1/auth/logout
-Authorization: Bearer <access-token>
-
-# Logout All Sessions
-POST /api/v1/auth/logout-all
-Authorization: Bearer <access-token>
-```
-
-### User Management Endpoints
-
-#### Admin Only Endpoints
-
-```bash
-# Get All Users (with pagination and filters)
-GET /api/v1/users?page=1&limit=10&role=EMPLOYEE&status=ACTIVE
-Authorization: Bearer <admin-token>
-
-# Get User Statistics
-GET /api/v1/users/stats
-Authorization: Bearer <admin-token>
-
-# Create New User
-POST /api/v1/users
-Authorization: Bearer <admin-token>
-{
-  "email": "newuser@example.com",
-  "firstName": "Jane",
-  "lastName": "Smith",
-  "role": "EMPLOYEE",
-  "generatePassword": true
-}
-
-# Update User
-PATCH /api/v1/users/:id
-Authorization: Bearer <admin-token>
-
-# Update User Status
-PATCH /api/v1/users/:id/status
-Authorization: Bearer <admin-token>
-{
-  "status": "INACTIVE"
-}
-
-# Update User Role (Super Admin only)
-PATCH /api/v1/users/:id/role
-Authorization: Bearer <super-admin-token>
-{
-  "role": "MANAGER"
-}
-
-# Delete User (Super Admin only)
-DELETE /api/v1/users/:id
-Authorization: Bearer <super-admin-token>
-```
-
-#### Self-Service Endpoints
-
-```bash
-# Get Own Profile
-GET /api/v1/users/me/profile
-Authorization: Bearer <access-token>
-
-# Update Own Profile
-PATCH /api/v1/users/me/profile
-Authorization: Bearer <access-token>
-{
-  "firstName": "UpdatedName",
-  "bio": "Updated bio"
-}
-
-# Update Profile Details
-PATCH /api/v1/users/me/profile/details
-Authorization: Bearer <access-token>
-{
-  "bio": "Software Developer",
-  "phoneNumber": "+1234567890",
-  "address": "123 Main St",
-  "city": "New York",
-  "country": "USA"
-}
-```
-
-### Default Users
-
-After running the seed script, the following test users are available:
-
-| Email             | Password    | Role        | Description          |
-| ----------------- | ----------- | ----------- | -------------------- |
-| admin@jooav.com   | password123 | SUPER_ADMIN | System Administrator |
-| manager@jooav.com | password123 | MANAGER     | Operations Manager   |
-
-### Security Configuration
-
-Update your `.env` file with secure values:
-
-```env
-# JWT Configuration
-JWT_SECRET=your-super-secret-jwt-key-change-in-production
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
-
-# Password Hashing
-BCRYPT_ROUNDS=12
-
-# Rate Limiting
-THROTTLE_TTL=60000
-THROTTLE_LIMIT=10
-```
-
-### Using Authentication in Your Code
-
-```typescript
-import { UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { RolesGuard } from './guards/roles.guard';
-import { Roles } from './decorators/roles.decorator';
-import { CurrentUser } from './decorators/current-user.decorator';
-import { UserRole } from '@prisma/client';
-
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.MANAGER)
-export class ExampleController {
-  @Get('protected')
-  protectedRoute(@CurrentUser() user: User) {
-    return { message: `Hello ${user.firstName}!` };
-  }
-}
-```
-
 ## 🔒 Security Features
 
 - **Helmet**: Security headers configuration
 - **CORS**: Cross-origin resource sharing controls
 - **Rate Limiting**: Request throttling protection
 - **Input Validation**: Comprehensive request validation
-- **JWT Authentication**: Secure token-based authentication (ready to implement)
-- **Role-based Authorization**: Granular permission system
+- **JWT Authentication**: Secure token-based authentication
+- **Role-based Authorization**: Granular permission system with 4 distinct user roles
+
+## 👥 User Roles & Permissions
+
+The system implements a 4-tier role-based access control system:
+
+### 1. **SUPER_ADMIN** 🔑
+
+- **Highest level access** - Full system control (Platform Owner)
+- **Permissions**: All system operations
+  - Create, manage, and delete all user types
+  - Full manufacturer management and approval
+  - Complete system configuration access
+  - Order override capabilities
+  - Full analytics and reporting access
+- **Regional Assignment**: None - Global access without restrictions (Platform Owner)
+- **Use Case**: Platform owners and system administrators
+
+### 2. **ADMIN** 👨‍💼
+
+- **Administrative access** with configurable permissions
+- **Permissions** (configurable per admin):
+  - Manufacturer management (if enabled)
+  - SME user approval (if enabled)
+  - Sub-admin management (if enabled)
+  - Analytics access (if enabled)
+  - Limited system configuration (if enabled)
+- **Regional Assignment**: Optional - Can manage specific regions or operate nation-wide
+- **Use Case**: Regional managers, department heads
+
+### 3. **SUB_ADMIN** 📋
+
+- **Procurement officers** - Order and vendor management
+- **Permissions**:
+  - Order processing and management
+  - Vendor relationship management
+  - Limited user management within assigned scope
+  - Regional or order-based assignment flexibility
+- **Regional Assignment**: Optional - Can be assigned by region OR by specific orders
+- **Use Case**: Procurement officers, order managers
+
+### 4. **SME_USER** 🏭
+
+- **Small & Medium Enterprises** - End customers
+- **Permissions**:
+  - Place and track orders
+  - Manage company profile
+  - View assigned product catalog
+  - Access order history and analytics
+- **Use Case**: Business customers placing orders
+
+### Regional Assignment Strategy
+
+The system supports flexible regional assignments for scalability:
+
+- **Current State**: Single-region operation with optional regional assignments
+- **Future Ready**: Multi-region expansion supported without system changes
+- **Assignment Types**:
+  - Regional-based (geographic territories)
+  - Order-based (specific customer/order assignments)
+  - Hybrid approach for maximum flexibility
+
+## 🔐 Authentication System
+
+### Default Admin Account
+
+```bash
+# Create Super Admin (development)
+yarn admin:seed
+
+# Default credentials (change immediately)
+Email: superadmin@jooav.com
+Password: password123
+Role: SUPER_ADMIN
+```
+
+### JWT Token Structure
+
+```typescript
+{
+  sub: string,        // User ID
+  email: string,      // User email
+  role: UserRole,     // User role enum
+  type: 'admin' | 'user',
+  regions?: string[]  // Optional assigned regions
+}
+```
 
 ## 📚 API Documentation
 

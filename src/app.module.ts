@@ -20,9 +20,10 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor';
 
-// Logging
+// Services
 import { LoggerService } from './common/utils/logger.service';
 import { AuditLogService } from './common/services/audit-log.service';
+import { RedisModule } from './common/services/redis.module';
 
 // Modules
 import { UploadModule } from './modules/upload.module';
@@ -72,6 +73,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
     TerminusModule,
 
     // Feature modules
+    RedisModule,
     PrismaModule,
     AuthModule,
     UsersModule,
