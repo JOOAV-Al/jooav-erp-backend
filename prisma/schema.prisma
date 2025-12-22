@@ -5,13 +5,14 @@ generator client {
   provider = "prisma-client-js"
 }
 
-generator dbml {
-  provider = "prisma-dbml-generator"
-}
+// generator dbml {
+//   provider = "prisma-dbml-generator"
+// }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+   provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ================================
@@ -691,4 +692,5 @@ enum ResourceType {
   INVENTORY
   REGION
   SYSTEM_CONFIG
+  ADMIN_AUTH
 }
