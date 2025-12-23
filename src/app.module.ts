@@ -12,7 +12,18 @@ import { PrismaService } from './database/prisma.service';
 import { HealthController } from './health/health.controller';
 
 // Configuration
-import { configurations, validationSchema } from './config';
+import {
+  appConfig,
+  databaseConfig,
+  securityConfig,
+  loggingConfig,
+  cloudinaryConfig,
+  redisConfig,
+  swaggerConfig,
+  sentryConfig,
+  emailConfig,
+  validationSchema,
+} from './config';
 
 // Common middleware
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -24,6 +35,7 @@ import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor
 import { LoggerService } from './common/utils/logger.service';
 import { AuditLogService } from './common/services/audit-log.service';
 import { RedisModule } from './common/services/redis.module';
+import { EmailModule } from './common/services/email.module';
 
 // Modules
 import { UploadModule } from './modules/upload.module';
@@ -31,6 +43,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { AdminModule } from './admin/admin.module';
+import { EmailTestModule } from './modules/email/email.module';
 import { SentryModule } from '@sentry/nestjs/setup';
 
 @Module({
@@ -41,7 +54,17 @@ import { SentryModule } from '@sentry/nestjs/setup';
     // Configuration module with validation
     ConfigModule.forRoot({
       isGlobal: true,
-      load: configurations,
+      load: [
+        appConfig,
+        databaseConfig,
+        securityConfig,
+        loggingConfig,
+        cloudinaryConfig,
+        redisConfig,
+        swaggerConfig,
+        sentryConfig,
+        emailConfig,
+      ],
       validationSchema,
       validationOptions: {
         allowUnknown: true,
@@ -74,11 +97,13 @@ import { SentryModule } from '@sentry/nestjs/setup';
 
     // Feature modules
     RedisModule,
+    EmailModule,
     PrismaModule,
     AuthModule,
     UsersModule,
     AdminModule,
     UploadModule,
+    EmailTestModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

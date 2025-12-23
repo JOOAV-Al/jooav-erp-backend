@@ -160,15 +160,10 @@ export class AdminAuthService {
     // Create session record
     await this.createAdminSession(admin.id, tokens.refreshToken, request);
 
-    // Log successful login
-    await this.logAdminAuditEvent(
-      admin.id,
-      AdminAction.LOGIN_SUCCESS,
-      'ADMIN_AUTH',
-      admin.id,
-      request,
-      { email },
-    );
+    // Log successful admin login
+    await this.auditLogService.logAuthEvent(admin.id, 'LOGIN', request, {
+      email,
+    });
 
     return {
       ...tokens,
