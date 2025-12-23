@@ -35,6 +35,8 @@ import {
   RegisterDto,
   ChangePasswordDto,
   RefreshTokenDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
 } from './dto/auth.dto';
 import {
   AuthResponseDto,
@@ -281,5 +283,55 @@ export class AuthController {
       newStatus: status,
       adminUser: currentUser.email,
     };
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Request password reset',
+    description: 'Send password reset email to user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Password reset email sent if email exists',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid email format' })
+  @ApiBody({ type: ForgotPasswordDto })
+  async forgotPassword(
+    @Body() forgotPasswordDto: ForgotPasswordDto,
+    @Request() req: any,
+  ) {
+    return this.authService.forgotPassword(forgotPasswordDto, req);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reset password',
+    description: 'Reset user password using reset token',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Password reset successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid or expired token' })
+  @ApiBody({ type: ResetPasswordDto })
+  async resetPassword(
+    @Body() resetPasswordDto: ResetPasswordDto,
+    @Request() req: any,
+  ) {
+    return this.authService.resetPassword(resetPasswordDto, req);
   }
 }
