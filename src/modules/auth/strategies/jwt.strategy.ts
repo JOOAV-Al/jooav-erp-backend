@@ -33,6 +33,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found or inactive');
     }
 
+    // Check if token was issued before password change
+    if (user.passwordChangedAt && payload.iat) {
+      const passwordChangedTimestamp = Math.floor(
+        user.passwordChangedAt.getTime() / 1000,
+      );
+      if (payload.iat < passwordChangedTimestamp) {
+        throw new UnauthorizedException(
+          'Token invalidated due to password change',
+        );
+      }
+    }
+
     // Check if token is blacklisted (for logout functionality)
     if (payload.jti) {
       const isBlacklisted = await this.authService.isTokenBlacklisted(

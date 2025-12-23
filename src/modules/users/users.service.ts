@@ -9,6 +9,7 @@ import * as argon2 from 'argon2';
 
 import { PrismaService } from '../../database/prisma.service';
 import { AuditLogService } from '../../common/services/audit-log.service';
+import { ConfigService } from '@nestjs/config';
 import { PaginationDto, PaginatedResponse } from '../../common/dto';
 import {
   CreateUserDto,
@@ -31,6 +32,7 @@ export class UsersService {
   constructor(
     private prisma: PrismaService,
     private auditLogService: AuditLogService,
+    private configService: ConfigService,
   ) {}
 
   // ================================
