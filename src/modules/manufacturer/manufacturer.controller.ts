@@ -468,4 +468,108 @@ export class ManufacturerController {
   ): Promise<any> {
     return this.manufacturerService.getManufacturerOrders(id, paginationDto);
   }
+
+  // ================================
+  // ADMIN-ONLY DELETED MANUFACTURERS
+  // ================================
+
+  @Get('deleted/list')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Get all deleted manufacturers (Admin only)',
+    description:
+      'Retrieve a paginated list of manufacturers that have been soft deleted for audit purposes',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10, max: 100)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search in name, email, or description',
+  })
+  @ApiQuery({
+    name: 'country',
+    required: false,
+    type: String,
+    description: 'Filter by country',
+  })
+  @ApiQuery({
+    name: 'state',
+    required: false,
+    type: String,
+    description: 'Filter by state',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of deleted manufacturers retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            allOf: [
+              { $ref: '#/components/schemas/ManufacturerResponseDto' },
+              {
+                type: 'object',
+                properties: {
+                  deletedBy: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', example: 'admin123' },
+                      email: {
+                        type: 'string',
+                        example: 'admin@jooav.com',
+                      },
+                      name: { type: 'string', example: 'John Admin' },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+        pagination: { $ref: '#/components/schemas/PaginationMeta' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  async getDeletedManufacturers(
+    @Query() queryDto: ManufacturerQueryDto,
+  ): Promise<
+    PaginatedResponse<
+      ManufacturerResponseDto & {
+        deletedBy: { id: string; email: string; name: string };
+      }
+    >
+  > {
+    const paginationDto = new PaginationDto();
+    paginationDto.page = queryDto.page ? parseInt(queryDto.page, 10) : 1;
+    paginationDto.limit = queryDto.limit ? parseInt(queryDto.limit, 10) : 10;
+
+    const filtersDto = {
+      search: queryDto.search,
+      country: queryDto.country,
+      state: queryDto.state,
+    };
+
+    return this.manufacturerService.getDeletedManufacturers(
+      paginationDto,
+      filtersDto,
+    );
+  }
 }
