@@ -23,7 +23,7 @@ import {
 import { UserRole, UserStatus } from '@prisma/client';
 
 import { UsersService } from './users.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import {
   CurrentUser,
@@ -43,8 +43,9 @@ import { UserProfileDto } from '../auth/dto/auth-response.dto';
 
 @ApiTags('Users')
 @Controller('users')
-@UseGuards(JwtAuthGuard)
+@UseGuards(UnifiedAuthGuard)
 @ApiBearerAuth('access-token')
+@ApiBearerAuth('admin-access-token')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 

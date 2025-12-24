@@ -84,6 +84,17 @@ async function bootstrap() {
       },
       'access-token',
     )
+    .addBearerAuth(
+      {
+        description: 'Admin JWT Authorization header using the Bearer scheme.',
+        name: 'Authorization',
+        bearerFormat: 'JWT',
+        scheme: 'Bearer',
+        type: 'http',
+        in: 'Header',
+      },
+      'admin-access-token',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

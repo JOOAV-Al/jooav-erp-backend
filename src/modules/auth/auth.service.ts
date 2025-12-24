@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -12,7 +13,8 @@ import * as argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
 
 import { PrismaService } from '../../database/prisma.service';
-import { AuditLogService } from '../../common/services/audit-log.service';
+import { AuditService } from '../audit/audit.service';
+import { EmailService } from '../email/email.service';
 import { JwtPayload } from './strategies/jwt.strategy';
 import {
   LoginDto,
@@ -29,6 +31,7 @@ import {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly jwtSecret: string;
   private readonly jwtExpiresIn: string;
   private readonly argon2Options = {
@@ -43,7 +46,8 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
-    private auditLogService: AuditLogService,
+    private auditService: AuditService,
+    private emailService: EmailService,
   ) {
     this.jwtSecret =
       this.configService.get('security.jwtSecret') || 'your-secret-key';
@@ -106,12 +110,10 @@ export class AuthService {
 
     if (!user) {
       // Log failed login attempt
-      await this.auditLogService.logAuthEvent(
-        'unknown',
-        'LOGIN_FAILED',
-        request,
-        { email: loginDto.email, reason: 'Invalid credentials' },
-      );
+      await this.auditService.logAuthEvent('unknown', 'LOGIN_FAILED', request, {
+        email: loginDto.email,
+        reason: 'Invalid credentials',
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -121,7 +123,7 @@ export class AuthService {
     await this.createUserSession(user.id, tokens.refreshToken, request);
 
     // Log successful login
-    await this.auditLogService.logAuthEvent(user.id, 'LOGIN', request, {
+    await this.auditService.logAuthEvent(user.id, 'LOGIN', request, {
       email: user.email,
     });
 
@@ -185,7 +187,7 @@ export class AuthService {
     await this.createUserSession(user.id, tokens.refreshToken, request);
 
     // Log registration
-    await this.auditLogService.logAuthEvent(user.id, 'REGISTER', request, {
+    await this.auditService.logAuthEvent(user.id, 'REGISTER', request, {
       email: user.email,
     });
 
@@ -260,7 +262,7 @@ export class AuthService {
     }
 
     // Log logout
-    await this.auditLogService.logAuthEvent(userId, 'LOGOUT', request);
+    await this.auditService.logAuthEvent(userId, 'LOGOUT', request);
   }
 
   /**
@@ -308,12 +310,31 @@ export class AuthService {
       where: { userId },
     });
 
+    // Send password change confirmation email
+    try {
+      await this.emailService.sendTemplatedEmail(
+        user.email,
+        'passwordChanged',
+        {
+          name: user.firstName
+            ? `${user.firstName} ${user.lastName || ''}`.trim()
+            : user.email,
+          changeTime: new Date().toLocaleString(),
+          ipAddress:
+            request?.ip || request?.connection?.remoteAddress || 'Unknown',
+          userAgent: request?.get?.('User-Agent') || 'Unknown',
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        'Failed to send password change confirmation email:',
+        error,
+      );
+      // Don't throw error as password was already changed successfully
+    }
+
     // Log password change
-    await this.auditLogService.logAuthEvent(
-      userId,
-      'PASSWORD_CHANGED',
-      request,
-    );
+    await this.auditService.logAuthEvent(userId, 'PASSWORD_CHANGED', request);
   }
 
   // ================================
@@ -444,5 +465,176 @@ export class AuthService {
         userId,
       },
     });
+  }
+
+  /**
+   * Request password reset
+   */
+  async forgotPassword(
+    forgotPasswordDto: ForgotPasswordDto,
+    request?: any,
+  ): Promise<{ message: string }> {
+    const { email } = forgotPasswordDto;
+
+    // Check if user exists
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    // Don't reveal if email exists or not for security
+    if (!user) {
+      return {
+        message: 'If the email exists, a reset link has been sent.',
+      };
+    }
+
+    // Check if user is active
+    if (user.status !== UserStatus.ACTIVE) {
+      return {
+        message: 'If the email exists, a reset link has been sent.',
+      };
+    }
+
+    // Generate reset token
+    const resetToken = uuidv4();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1); // 1 hour expiry
+
+    // Invalidate any existing reset tokens for this email
+    await this.prisma.passwordReset.updateMany({
+      where: {
+        email: email.toLowerCase(),
+        used: false,
+        expiresAt: { gt: new Date() },
+      },
+      data: { used: true },
+    });
+
+    // Create new password reset record
+    await this.prisma.passwordReset.create({
+      data: {
+        email: email.toLowerCase(),
+        token: resetToken,
+        expiresAt,
+      },
+    });
+
+    // Send password reset email
+    const resetUrl = `${this.configService.get('email.baseUrl')}/reset-password?token=${resetToken}`;
+
+    try {
+      await this.emailService.sendTemplatedEmail(email, 'passwordReset', {
+        name: user.firstName
+          ? `${user.firstName} ${user.lastName || ''}`.trim()
+          : user.email,
+        resetUrl,
+        expiresIn: '1 hour',
+      });
+    } catch (error) {
+      this.logger.error('Failed to send password reset email:', error);
+      // Don't throw error to avoid revealing if email exists
+    }
+
+    // Log password reset request
+    await this.auditService.logAuthEvent(user.id, 'PASSWORD_CHANGED', request, {
+      email,
+      action: 'reset_requested',
+    });
+
+    return {
+      message: 'If the email exists, a reset link has been sent.',
+    };
+  }
+
+  /**
+   * Reset password using token
+   */
+  async resetPassword(
+    resetPasswordDto: ResetPasswordDto,
+    request?: any,
+  ): Promise<{ message: string }> {
+    const { token, password } = resetPasswordDto;
+
+    // Find valid reset token
+    const passwordReset = await this.prisma.passwordReset.findFirst({
+      where: {
+        token,
+        used: false,
+        expiresAt: { gt: new Date() },
+      },
+    });
+
+    if (!passwordReset) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    // Find user
+    const user = await this.prisma.user.findUnique({
+      where: { email: passwordReset.email },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Invalid reset token');
+    }
+
+    // Check if user is active
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new BadRequestException('Account is not active');
+    }
+
+    // Hash new password
+    const hashedPassword = await argon2.hash(password, this.argon2Options);
+
+    // Update user password and mark reset as used
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          password: hashedPassword,
+          passwordChangedAt: new Date(),
+        },
+      }),
+      this.prisma.passwordReset.update({
+        where: { id: passwordReset.id },
+        data: { used: true },
+      }),
+      // Revoke all user sessions
+      this.prisma.userSession.deleteMany({
+        where: { userId: user.id },
+      }),
+    ]);
+
+    // Invalidate all JWT tokens for this user by updating passwordChangedAt
+    // This will cause token validation to fail since tokens issued before passwordChangedAt are invalid
+
+    // Send password reset success confirmation email
+    try {
+      await this.emailService.sendTemplatedEmail(
+        user.email,
+        'passwordResetSuccess',
+        {
+          name: user.firstName
+            ? `${user.firstName} ${user.lastName || ''}`.trim()
+            : user.email,
+          resetTime: new Date().toLocaleString(),
+          ipAddress:
+            request?.ip || request?.connection?.remoteAddress || 'Unknown',
+          userAgent: request?.get?.('User-Agent') || 'Unknown',
+        },
+      );
+    } catch (error) {
+      this.logger.error('Failed to send password reset success email:', error);
+      // Don't throw error as password was already reset successfully
+    }
+
+    // Log password reset
+    await this.auditService.logAuthEvent(user.id, 'PASSWORD_CHANGED', request, {
+      resetToken: true,
+    });
+
+    return {
+      message:
+        'Password has been reset successfully. Please log in with your new password.',
+    };
   }
 }
