@@ -6,7 +6,7 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { PrismaService } from '../../database/prisma.service';
-import { AuditLogService } from '../../common/services/audit-log.service';
+import { AuditService } from '../audit/audit.service';
 
 // Strategies
 import { LocalStrategy } from './strategies/local.strategy';
@@ -37,7 +37,7 @@ import { RolesGuard } from './guards/roles.guard';
   providers: [
     AuthService,
     PrismaService,
-    AuditLogService,
+    AuditService,
 
     // Strategies
     LocalStrategy,

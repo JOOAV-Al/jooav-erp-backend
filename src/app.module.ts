@@ -12,7 +12,18 @@ import { PrismaService } from './database/prisma.service';
 import { HealthController } from './health/health.controller';
 
 // Configuration
-import { configurations, validationSchema } from './config';
+import {
+  appConfig,
+  databaseConfig,
+  securityConfig,
+  loggingConfig,
+  cloudinaryConfig,
+  redisConfig,
+  swaggerConfig,
+  sentryConfig,
+  emailConfig,
+  validationSchema,
+} from './config';
 
 // Common middleware
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -22,11 +33,12 @@ import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor
 
 // Services
 import { LoggerService } from './common/utils/logger.service';
-import { AuditLogService } from './common/services/audit-log.service';
-import { RedisModule } from './common/services/redis.module';
+import { AuditService } from './modules/audit/audit.service';
+import { CacheModule } from './modules/cache/cache.module';
+import { EmailModule } from './modules/email/email.module';
 
 // Modules
-import { UploadModule } from './modules/upload.module';
+import { StorageModule } from './modules/storage/storage.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
@@ -41,7 +53,17 @@ import { SentryModule } from '@sentry/nestjs/setup';
     // Configuration module with validation
     ConfigModule.forRoot({
       isGlobal: true,
-      load: configurations,
+      load: [
+        appConfig,
+        databaseConfig,
+        securityConfig,
+        loggingConfig,
+        cloudinaryConfig,
+        redisConfig,
+        swaggerConfig,
+        sentryConfig,
+        emailConfig,
+      ],
       validationSchema,
       validationOptions: {
         allowUnknown: true,
@@ -73,18 +95,19 @@ import { SentryModule } from '@sentry/nestjs/setup';
     TerminusModule,
 
     // Feature modules
-    RedisModule,
+    CacheModule,
+    EmailModule,
     PrismaModule,
     AuthModule,
     UsersModule,
     AdminModule,
-    UploadModule,
+    StorageModule,
   ],
   controllers: [AppController, HealthController],
   providers: [
     AppService,
     PrismaService,
-    AuditLogService,
+    AuditService,
 
     // Global pipes
     {

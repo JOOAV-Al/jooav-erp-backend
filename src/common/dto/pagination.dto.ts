@@ -32,7 +32,7 @@ export class PaginationDto {
   @ApiProperty({
     description: 'Search term',
     required: false,
-    example: 'search query',
+    // example: '',
   })
   @IsOptional()
   search?: string;

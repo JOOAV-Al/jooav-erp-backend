@@ -9,7 +9,7 @@ import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { Request } from 'express';
 
-import { AuditLogService } from '../services/audit-log.service';
+import { AuditService } from '../../modules/audit/audit.service';
 import {
   AUDIT_LOG_KEY,
   AuditLogOptions,
@@ -19,7 +19,7 @@ import {
 export class AuditLogInterceptor implements NestInterceptor {
   constructor(
     private reflector: Reflector,
-    private auditLogService: AuditLogService,
+    private auditService: AuditService,
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
@@ -60,7 +60,7 @@ export class AuditLogInterceptor implements NestInterceptor {
       tap({
         next: (data) => {
           // Log successful operation
-          this.auditLogService.createAuditLog({
+          this.auditService.createAuditLog({
             ...auditData,
             metadata: {
               ...auditData.metadata,
@@ -71,7 +71,7 @@ export class AuditLogInterceptor implements NestInterceptor {
         },
         error: (error) => {
           // Log failed operation
-          this.auditLogService.createAuditLog({
+          this.auditService.createAuditLog({
             ...auditData,
             metadata: {
               ...auditData.metadata,

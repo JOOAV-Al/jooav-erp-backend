@@ -13,8 +13,8 @@ import * as argon2 from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
 
 import { PrismaService } from '../../database/prisma.service';
-import { AuditLogService } from '../../common/services/audit-log.service';
-import { EmailService } from '../../common/services/email.service';
+import { AuditService } from '../audit/audit.service';
+import { EmailService } from '../email/email.service';
 import { JwtPayload } from './strategies/jwt.strategy';
 import {
   LoginDto,
@@ -46,7 +46,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
-    private auditLogService: AuditLogService,
+    private auditService: AuditService,
     private emailService: EmailService,
   ) {
     this.jwtSecret =
@@ -110,12 +110,10 @@ export class AuthService {
 
     if (!user) {
       // Log failed login attempt
-      await this.auditLogService.logAuthEvent(
-        'unknown',
-        'LOGIN_FAILED',
-        request,
-        { email: loginDto.email, reason: 'Invalid credentials' },
-      );
+      await this.auditService.logAuthEvent('unknown', 'LOGIN_FAILED', request, {
+        email: loginDto.email,
+        reason: 'Invalid credentials',
+      });
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -125,7 +123,7 @@ export class AuthService {
     await this.createUserSession(user.id, tokens.refreshToken, request);
 
     // Log successful login
-    await this.auditLogService.logAuthEvent(user.id, 'LOGIN', request, {
+    await this.auditService.logAuthEvent(user.id, 'LOGIN', request, {
       email: user.email,
     });
 
@@ -189,7 +187,7 @@ export class AuthService {
     await this.createUserSession(user.id, tokens.refreshToken, request);
 
     // Log registration
-    await this.auditLogService.logAuthEvent(user.id, 'REGISTER', request, {
+    await this.auditService.logAuthEvent(user.id, 'REGISTER', request, {
       email: user.email,
     });
 
@@ -264,7 +262,7 @@ export class AuthService {
     }
 
     // Log logout
-    await this.auditLogService.logAuthEvent(userId, 'LOGOUT', request);
+    await this.auditService.logAuthEvent(userId, 'LOGOUT', request);
   }
 
   /**
@@ -336,11 +334,7 @@ export class AuthService {
     }
 
     // Log password change
-    await this.auditLogService.logAuthEvent(
-      userId,
-      'PASSWORD_CHANGED',
-      request,
-    );
+    await this.auditService.logAuthEvent(userId, 'PASSWORD_CHANGED', request);
   }
 
   // ================================
@@ -542,12 +536,10 @@ export class AuthService {
     }
 
     // Log password reset request
-    await this.auditLogService.logAuthEvent(
-      user.id,
-      'PASSWORD_CHANGED',
-      request,
-      { email, action: 'reset_requested' },
-    );
+    await this.auditService.logAuthEvent(user.id, 'PASSWORD_CHANGED', request, {
+      email,
+      action: 'reset_requested',
+    });
 
     return {
       message: 'If the email exists, a reset link has been sent.',
@@ -636,12 +628,9 @@ export class AuthService {
     }
 
     // Log password reset
-    await this.auditLogService.logAuthEvent(
-      user.id,
-      'PASSWORD_CHANGED',
-      request,
-      { resetToken: true },
-    );
+    await this.auditService.logAuthEvent(user.id, 'PASSWORD_CHANGED', request, {
+      resetToken: true,
+    });
 
     return {
       message:

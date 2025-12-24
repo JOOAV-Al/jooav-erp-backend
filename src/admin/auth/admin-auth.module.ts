@@ -6,7 +6,7 @@ import { PassportModule } from '@nestjs/passport';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminAuthController } from './admin-auth.controller';
 import { PrismaService } from '../../database/prisma.service';
-import { AuditLogService } from '../../common/services/audit-log.service';
+import { AuditService } from '../../modules/audit/audit.service';
 
 // Strategies
 import { AdminJwtStrategy } from './strategies/admin-jwt.strategy';
@@ -35,7 +35,7 @@ import { AdminRolesGuard } from './guards/admin-roles.guard';
   providers: [
     AdminAuthService,
     PrismaService,
-    AuditLogService,
+    AuditService,
 
     // Strategies
     AdminJwtStrategy,

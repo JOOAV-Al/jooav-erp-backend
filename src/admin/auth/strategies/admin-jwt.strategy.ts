@@ -48,6 +48,18 @@ export class AdminJwtStrategy extends PassportStrategy(Strategy, 'admin-jwt') {
       throw new UnauthorizedException('Admin account not found or inactive');
     }
 
+    // Check if token was issued before password change
+    if (admin.passwordChangedAt && payload.iat) {
+      const passwordChangedTimestamp = Math.floor(
+        admin.passwordChangedAt.getTime() / 1000,
+      );
+      if (payload.iat < passwordChangedTimestamp) {
+        throw new UnauthorizedException(
+          'Token invalidated due to password change',
+        );
+      }
+    }
+
     return admin;
   }
 }

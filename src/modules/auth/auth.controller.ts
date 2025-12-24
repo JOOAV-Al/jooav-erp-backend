@@ -21,7 +21,7 @@ import {
 
 import { AuthService } from './auth.service';
 import { LocalAuthGuard } from './guards/local-auth.guard';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import {
   CurrentUser,
@@ -116,7 +116,7 @@ export class AuthController {
   }
 
   @Post('logout')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(UnifiedAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'User logout' })
@@ -146,7 +146,7 @@ export class AuthController {
   }
 
   @Get('profile')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(UnifiedAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({
@@ -161,7 +161,7 @@ export class AuthController {
   }
 
   @Patch('change-password')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(UnifiedAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Change user password' })
@@ -184,7 +184,7 @@ export class AuthController {
   }
 
   @Get('sessions')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(UnifiedAuthGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get user active sessions' })
   @ApiResponse({
@@ -200,7 +200,7 @@ export class AuthController {
   }
 
   @Delete('sessions/:sessionId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(UnifiedAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Revoke a specific session' })
@@ -234,7 +234,7 @@ export class AuthController {
   // ================================
 
   @Get('admin/users')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get all users (Admin only)' })
@@ -256,7 +256,7 @@ export class AuthController {
   }
 
   @Patch('admin/users/:userId/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Update user status (Admin only)' })
