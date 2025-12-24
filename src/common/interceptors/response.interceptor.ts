@@ -20,6 +20,24 @@ export class ResponseInterceptor<T> implements NestInterceptor<
     return next.handle().pipe(
       map((data) => {
         const message = this.getSuccessMessage(context);
+
+        // Check if the data already has pagination structure (data + meta)
+        if (
+          data &&
+          typeof data === 'object' &&
+          'data' in data &&
+          'meta' in data
+        ) {
+          // For paginated responses, use the updated constructor
+          return new BaseResponse(
+            message,
+            data.data,
+            ResponseStatus.SUCCESS,
+            data.meta,
+          );
+        }
+
+        // For non-paginated responses, use normal structure
         return new BaseResponse(message, data, ResponseStatus.SUCCESS);
       }),
     );
