@@ -49,7 +49,7 @@ import { AuditLog } from '../../common/decorators/audit-log.decorator';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
 import { BaseResponse } from '../../common/dto/base-response.dto';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { UserRole } from 'src/common/enums';
+import { UserRole } from '../../common/enums';
 
 @ApiTags('Brands')
 @Controller('brands')
