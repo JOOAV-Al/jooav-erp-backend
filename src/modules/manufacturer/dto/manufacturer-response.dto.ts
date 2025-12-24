@@ -146,6 +146,12 @@ export class ManufacturerResponseDto {
   updatedAt: Date;
 
   @ApiPropertyOptional({
+    description: 'Deletion timestamp (if soft deleted)',
+    example: '2024-01-20T15:45:00Z',
+  })
+  deletedAt?: Date;
+
+  @ApiPropertyOptional({
     description: 'User who created this manufacturer',
     type: UserInfoDto,
   })
@@ -156,6 +162,12 @@ export class ManufacturerResponseDto {
     type: UserInfoDto,
   })
   updatedBy?: UserInfoDto;
+
+  @ApiPropertyOptional({
+    description: 'User who deleted this manufacturer (if soft deleted)',
+    type: UserInfoDto,
+  })
+  deletedBy?: UserInfoDto;
 
   @ApiProperty({
     description: 'Number of products by this manufacturer',
