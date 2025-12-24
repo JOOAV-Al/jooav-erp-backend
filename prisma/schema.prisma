@@ -54,6 +54,7 @@ model User {
   deletedManufacturers Manufacturer[]     @relation("DeletedManufacturers")
   createdBrands        Brand[]            @relation("CreatedBrands")
   updatedBrands        Brand[]            @relation("UpdatedBrands")
+  deletedBrands        Brand[]            @relation("DeletedBrands")
 
   @@map("users")
 }
@@ -467,26 +468,23 @@ model Brand {
   name           String
   description    String?
   logo           String? // URL to brand logo
-  website        String?
   manufacturerId String
   status         BrandStatus @default(ACTIVE)
-
-  // Brand details
-  establishedYear Int?
-  country         String?
-  tagline         String?
 
   // Audit fields
   createdBy String
   updatedBy String
+  deletedBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  deletedAt DateTime?
 
   // Relations
   manufacturer  Manufacturer @relation("ManufacturerBrands", fields: [manufacturerId], references: [id])
   products      Product[]    @relation("BrandProducts")
   createdByUser User         @relation("CreatedBrands", fields: [createdBy], references: [id])
   updatedByUser User         @relation("UpdatedBrands", fields: [updatedBy], references: [id])
+  deletedByUser User?        @relation("DeletedBrands", fields: [deletedBy], references: [id])
 
   @@unique([name, manufacturerId]) // Brand name unique per manufacturer
   @@map("brands")

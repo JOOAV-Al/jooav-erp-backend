@@ -7,6 +7,7 @@ import {
 import { ManufacturerStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { StringUtils } from '../../common/utils/helpers.utils';
 import {
   CreateManufacturerDto,
   UpdateManufacturerDto,
@@ -23,6 +24,22 @@ export class ManufacturerService {
   ) {}
 
   /**
+   * Normalizes manufacturer name for case-insensitive comparison
+   * Trims whitespace and converts to lowercase
+   */
+  private normalizeManufacturerName(name: string): string {
+    return name.trim().toLowerCase();
+  }
+
+  /**
+   * Sanitizes manufacturer name for storage
+   * Converts to proper title case and trims whitespace
+   */
+  private sanitizeManufacturerName(name: string): string {
+    return StringUtils.titleCase(name.trim());
+  }
+
+  /**
    * Create a new manufacturer
    */
   async create(
@@ -30,12 +47,22 @@ export class ManufacturerService {
     adminId: string,
     request: any,
   ): Promise<ManufacturerResponseDto> {
-    // Check if manufacturer with same name already exists
-    const existingManufacturer = await this.prisma.manufacturer.findUnique({
-      where: { name: createDto.name },
+    // Sanitize manufacturer name
+    const sanitizedName = this.sanitizeManufacturerName(createDto.name);
+    const normalizedName = this.normalizeManufacturerName(sanitizedName);
+
+    // Check if manufacturer with same name already exists (case-insensitive)
+    const existingManufacturers = await this.prisma.manufacturer.findMany({
+      where: { deletedAt: null },
+      select: { name: true },
     });
 
-    if (existingManufacturer) {
+    const duplicateExists = existingManufacturers.some(
+      (manufacturer) =>
+        this.normalizeManufacturerName(manufacturer.name) === normalizedName,
+    );
+
+    if (duplicateExists) {
       throw new ConflictException('Manufacturer with this name already exists');
     }
 
@@ -55,6 +82,7 @@ export class ManufacturerService {
     const manufacturer = await this.prisma.manufacturer.create({
       data: {
         ...createDto,
+        name: sanitizedName,
         createdBy: adminId,
         updatedBy: adminId,
       },
@@ -98,7 +126,9 @@ export class ManufacturerService {
     const { page = 1, limit = 10 } = paginationDto;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = {
+      deletedAt: null, // Only get non-deleted manufacturers
+    };
 
     // Apply filters
     if (filters?.search) {
@@ -169,8 +199,8 @@ export class ManufacturerService {
    * Get manufacturer by ID
    */
   async findOne(id: string): Promise<ManufacturerResponseDto> {
-    const manufacturer = await this.prisma.manufacturer.findUnique({
-      where: { id },
+    const manufacturer = await this.prisma.manufacturer.findFirst({
+      where: { id, deletedAt: null },
       include: {
         createdByUser: {
           select: { id: true, email: true, firstName: true, lastName: true },
@@ -226,14 +256,23 @@ export class ManufacturerService {
 
     // Check name uniqueness if being updated
     if (updateDto.name && updateDto.name !== existingManufacturer.name) {
-      const duplicateName = await this.prisma.manufacturer.findFirst({
+      const sanitizedName = this.sanitizeManufacturerName(updateDto.name);
+      const normalizedName = this.normalizeManufacturerName(sanitizedName);
+
+      const existingManufacturers = await this.prisma.manufacturer.findMany({
         where: {
-          name: updateDto.name,
+          deletedAt: null,
           id: { not: id },
         },
+        select: { name: true },
       });
 
-      if (duplicateName) {
+      const duplicateExists = existingManufacturers.some(
+        (manufacturer) =>
+          this.normalizeManufacturerName(manufacturer.name) === normalizedName,
+      );
+
+      if (duplicateExists) {
         throw new ConflictException(
           'Manufacturer with this name already exists',
         );
@@ -259,12 +298,20 @@ export class ManufacturerService {
       }
     }
 
+    // Prepare update data with sanitized name if provided
+    const updateData: any = {
+      ...updateDto,
+      updatedBy: adminId,
+    };
+
+    // Sanitize name if it's being updated
+    if (updateDto.name) {
+      updateData.name = this.sanitizeManufacturerName(updateDto.name);
+    }
+
     const updatedManufacturer = await this.prisma.manufacturer.update({
       where: { id },
-      data: {
-        ...updateDto,
-        updatedBy: adminId,
-      },
+      data: updateData,
       include: {
         createdByUser: {
           select: { id: true, email: true, firstName: true, lastName: true },
@@ -638,6 +685,95 @@ export class ManufacturerService {
       productsCount: manufacturer._count?.products || 0,
       ordersCount: manufacturer._count?.orders || 0,
       products: manufacturer.products || [],
+    };
+  }
+
+  async getDeletedManufacturers(
+    paginationDto: PaginationDto,
+    filters?: {
+      search?: string;
+      country?: string;
+      state?: string;
+    },
+  ): Promise<
+    PaginatedResponse<
+      ManufacturerResponseDto & {
+        deletedBy: { id: string; email: string; name: string };
+      }
+    >
+  > {
+    const { page = 1, limit = 10 } = paginationDto;
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      deletedAt: { not: null }, // Only get deleted manufacturers
+    };
+
+    // Apply filters
+    if (filters?.search) {
+      where.OR = [
+        { name: { contains: filters.search, mode: 'insensitive' } },
+        { email: { contains: filters.search, mode: 'insensitive' } },
+        { description: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+
+    if (filters?.country) {
+      where.country = filters.country;
+    }
+
+    if (filters?.state) {
+      where.state = filters.state;
+    }
+
+    const [manufacturers, total] = await Promise.all([
+      this.prisma.manufacturer.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { deletedAt: 'desc' },
+        include: {
+          createdByUser: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
+          updatedByUser: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
+          deletedByUser: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
+          _count: {
+            select: {
+              brands: true,
+              products: true,
+            },
+          },
+        },
+      }),
+      this.prisma.manufacturer.count({ where }),
+    ]);
+
+    const manufacturersWithDeletedInfo = manufacturers.map((manufacturer) => ({
+      ...this.transformToResponseDto(manufacturer),
+      deletedBy: {
+        id: manufacturer.deletedByUser!.id,
+        email: manufacturer.deletedByUser!.email,
+        name: `${
+          manufacturer.deletedByUser!.firstName || ''
+        } ${manufacturer.deletedByUser!.lastName || ''}`.trim(),
+      },
+    }));
+
+    return {
+      data: manufacturersWithDeletedInfo as any,
+      meta: {
+        page,
+        limit,
+        totalItems: total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPreviousPage: page > 1,
+      },
     };
   }
 }
