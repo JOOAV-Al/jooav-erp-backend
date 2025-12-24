@@ -51,6 +51,7 @@ model User {
   subAdminProfile      SubAdminProfile?
   createdManufacturers Manufacturer[]     @relation("CreatedManufacturers")
   updatedManufacturers Manufacturer[]     @relation("UpdatedManufacturers")
+  deletedManufacturers Manufacturer[]     @relation("DeletedManufacturers")
   createdBrands        Brand[]            @relation("CreatedBrands")
   updatedBrands        Brand[]            @relation("UpdatedBrands")
 
@@ -443,8 +444,10 @@ model Manufacturer {
   // Audit fields
   createdBy String
   updatedBy String
+  deletedBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  deletedAt DateTime?
 
   // Relations
   brands        Brand[]   @relation("ManufacturerBrands")
@@ -452,6 +455,7 @@ model Manufacturer {
   orders        Order[]   @relation("ManufacturerOrders")
   createdByUser User      @relation("CreatedManufacturers", fields: [createdBy], references: [id])
   updatedByUser User      @relation("UpdatedManufacturers", fields: [updatedBy], references: [id])
+  deletedByUser User?     @relation("DeletedManufacturers", fields: [deletedBy], references: [id])
   region        Region?   @relation(fields: [regionId], references: [id])
   regionId      String?
 

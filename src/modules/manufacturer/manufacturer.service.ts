@@ -134,6 +134,9 @@ export class ManufacturerService {
           updatedByUser: {
             select: { id: true, email: true, firstName: true, lastName: true },
           },
+          deletedByUser: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
           _count: {
             select: {
               products: true,
@@ -173,6 +176,9 @@ export class ManufacturerService {
           select: { id: true, email: true, firstName: true, lastName: true },
         },
         updatedByUser: {
+          select: { id: true, email: true, firstName: true, lastName: true },
+        },
+        deletedByUser: {
           select: { id: true, email: true, firstName: true, lastName: true },
         },
         products: {
@@ -367,7 +373,16 @@ export class ManufacturerService {
       );
     }
 
-    await this.prisma.manufacturer.delete({ where: { id } });
+    // Soft delete by setting status to SUSPENDED and recording deletion audit
+    await this.prisma.manufacturer.update({
+      where: { id },
+      data: {
+        status: ManufacturerStatus.SUSPENDED,
+        updatedBy: adminId,
+        deletedBy: adminId,
+        deletedAt: new Date(),
+      },
+    });
 
     // Log audit event
     await this.auditService.createAuditLog({
@@ -598,6 +613,7 @@ export class ManufacturerService {
       status: manufacturer.status,
       createdAt: manufacturer.createdAt,
       updatedAt: manufacturer.updatedAt,
+      deletedAt: manufacturer.deletedAt,
       createdBy: manufacturer.createdByUser
         ? {
             id: manufacturer.createdByUser.id,
@@ -610,6 +626,13 @@ export class ManufacturerService {
             id: manufacturer.updatedByUser.id,
             email: manufacturer.updatedByUser.email,
             name: `${manufacturer.updatedByUser.firstName || ''} ${manufacturer.updatedByUser.lastName || ''}`.trim(),
+          }
+        : undefined,
+      deletedBy: manufacturer.deletedByUser
+        ? {
+            id: manufacturer.deletedByUser.id,
+            email: manufacturer.deletedByUser.email,
+            name: `${manufacturer.deletedByUser.firstName || ''} ${manufacturer.deletedByUser.lastName || ''}`.trim(),
           }
         : undefined,
       productsCount: manufacturer._count?.products || 0,
