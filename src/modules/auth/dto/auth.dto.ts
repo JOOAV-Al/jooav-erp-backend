@@ -12,14 +12,14 @@ import {
 export class LoginDto {
   @ApiProperty({
     description: 'Email address',
-    example: 'admin@jooav.com',
+    example: 'superadmin@jooav.com',
   })
   @IsEmail({}, { message: 'Please provide a valid email address' })
   email: string;
 
   @ApiProperty({
     description: 'Password',
-    example: 'Password123!',
+    example: 'password123',
     minLength: 8,
   })
   @IsString()
