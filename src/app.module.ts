@@ -43,6 +43,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { AdminModule } from './admin/admin.module';
+import { ManufacturerModule } from './modules/manufacturer/manufacturer.module';
 import { SentryModule } from '@sentry/nestjs/setup';
 
 @Module({
@@ -102,6 +103,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
     UsersModule,
     AdminModule,
     StorageModule,
+    ManufacturerModule,
   ],
   controllers: [AppController, HealthController],
   providers: [
