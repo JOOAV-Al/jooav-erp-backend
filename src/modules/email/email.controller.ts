@@ -6,7 +6,7 @@ import {
   ApiBearerAuth,
   ApiBody,
 } from '@nestjs/swagger';
-import { EmailService } from '../../common/services/email.service';
+import { EmailService } from './email.service';
 import { AdminJwtAuthGuard } from '../../admin/auth/guards/admin-jwt-auth.guard';
 
 export class SendEmailDto {

@@ -4,8 +4,8 @@ import { Redis } from '@upstash/redis';
 import IORedis from 'ioredis';
 
 @Injectable()
-export class RedisService {
-  private readonly logger = new Logger(RedisService.name);
+export class CacheService {
+  private readonly logger = new Logger(CacheService.name);
   private upstashClient?: Redis;
   private ioredisClient?: IORedis;
   private clientType: 'upstash' | 'traditional';

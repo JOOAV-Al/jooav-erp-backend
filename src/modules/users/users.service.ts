@@ -8,7 +8,7 @@ import { UserRole, UserStatus, User } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 import { PrismaService } from '../../database/prisma.service';
-import { AuditLogService } from '../../common/services/audit-log.service';
+import { AuditService } from '../audit/audit.service';
 import { ConfigService } from '@nestjs/config';
 import { PaginationDto, PaginatedResponse } from '../../common/dto';
 import {
@@ -31,7 +31,7 @@ export class UsersService {
 
   constructor(
     private prisma: PrismaService,
-    private auditLogService: AuditLogService,
+    private auditService: AuditService,
     private configService: ConfigService,
   ) {}
 
@@ -191,7 +191,7 @@ export class UsersService {
     });
 
     // Log user creation
-    await this.auditLogService.logUserAction(
+    await this.auditService.logUserAction(
       createdBy,
       'CREATE_USER',
       'USER',
@@ -263,7 +263,7 @@ export class UsersService {
     });
 
     // Log user update
-    await this.auditLogService.logDataChange(
+    await this.auditService.logDataChange(
       updatedBy,
       'UPDATE_USER',
       'USER',
@@ -319,7 +319,7 @@ export class UsersService {
     }
 
     // Log status change
-    await this.auditLogService.logDataChange(
+    await this.auditService.logDataChange(
       updatedBy,
       'UPDATE_USER_STATUS',
       'USER',
@@ -368,7 +368,7 @@ export class UsersService {
     });
 
     // Log role change
-    await this.auditLogService.logDataChange(
+    await this.auditService.logDataChange(
       updatedBy,
       'UPDATE_USER_ROLE',
       'USER',
@@ -432,7 +432,7 @@ export class UsersService {
     });
 
     // Log profile update
-    await this.auditLogService.logUserAction(
+    await this.auditService.logUserAction(
       updatedBy,
       'UPDATE_PROFILE',
       'USER',
@@ -465,7 +465,7 @@ export class UsersService {
     });
 
     // Log user deletion
-    await this.auditLogService.logUserAction(
+    await this.auditService.logUserAction(
       deletedBy,
       'DELETE_USER',
       'USER',

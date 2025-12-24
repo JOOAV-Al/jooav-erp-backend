@@ -11,7 +11,7 @@ import { UserRole, UserStatus, AdminAction } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 import { PrismaService } from '../../database/prisma.service';
-import { AuditLogService } from '../../common/services/audit-log.service';
+import { AuditService } from '../../modules/audit/audit.service';
 import {
   AdminLoginDto,
   AdminRefreshTokenDto,
@@ -34,7 +34,7 @@ export class AdminAuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
-    private auditLogService: AuditLogService,
+    private auditService: AuditService,
   ) {
     this.jwtSecret =
       this.configService.get('security.jwtSecret') || 'your-secret-key';
@@ -161,7 +161,7 @@ export class AdminAuthService {
     await this.createAdminSession(admin.id, tokens.refreshToken, request);
 
     // Log successful admin login
-    await this.auditLogService.logAuthEvent(admin.id, 'LOGIN', request, {
+    await this.auditService.logAuthEvent(admin.id, 'LOGIN', request, {
       email,
     });
 

@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { AuditLogService } from '../../common/services/audit-log.service';
+import { AuditService } from '../../modules/audit/audit.service';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
 import {
@@ -30,7 +30,7 @@ export class AdminManagementService {
 
   constructor(
     private prisma: PrismaService,
-    private auditLogService: AuditLogService,
+    private auditService: AuditService,
   ) {}
 
   /**
@@ -194,7 +194,7 @@ export class AdminManagementService {
     });
 
     // Log the creation
-    await this.auditLogService.createAuditLog({
+    await this.auditService.createAuditLog({
       userId: createdBy,
       action: 'CREATE_ADMIN_USER',
       resource: 'ADMIN',
@@ -276,7 +276,7 @@ export class AdminManagementService {
     });
 
     // Log the permission update
-    await this.auditLogService.createAuditLog({
+    await this.auditService.createAuditLog({
       userId: updatedBy,
       action: 'UPDATE_ADMIN_PERMISSIONS',
       resource: 'ADMIN',
@@ -328,7 +328,7 @@ export class AdminManagementService {
     });
 
     // Log the status update
-    await this.auditLogService.createAuditLog({
+    await this.auditService.createAuditLog({
       userId: updatedBy,
       action: 'UPDATE_ADMIN_STATUS',
       resource: 'ADMIN',
@@ -381,7 +381,7 @@ export class AdminManagementService {
     });
 
     // Log the promotion
-    await this.auditLogService.createAuditLog({
+    await this.auditService.createAuditLog({
       userId: promotedBy,
       action: 'PROMOTE_TO_SUPER_ADMIN',
       resource: 'ADMIN',
@@ -430,7 +430,7 @@ export class AdminManagementService {
     });
 
     // Log the deletion
-    await this.auditLogService.createAuditLog({
+    await this.auditService.createAuditLog({
       userId: deletedBy,
       action: 'DELETE_ADMIN_USER',
       resource: 'ADMIN',

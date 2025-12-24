@@ -6,7 +6,7 @@ import {
   PrismaHealthIndicator,
 } from '@nestjs/terminus';
 import { PrismaService } from '../database/prisma.service';
-import { RedisService } from '../common/services/redis.service';
+import { CacheService } from '../modules/cache/cache.service';
 
 @ApiTags('Health')
 @Controller('health')
@@ -15,7 +15,7 @@ export class HealthController {
     private health: HealthCheckService,
     private prismaHealth: PrismaHealthIndicator,
     private prismaService: PrismaService,
-    private redisService: RedisService,
+    private cacheService: CacheService,
   ) {}
 
   @Get()
@@ -27,7 +27,7 @@ export class HealthController {
     return this.health.check([
       () => this.prismaHealth.pingCheck('database', this.prismaService),
       async () => {
-        const isRedisHealthy = await this.redisService.ping();
+        const isRedisHealthy = await this.cacheService.ping();
         return {
           redis: {
             status: isRedisHealthy ? 'up' : 'down',

@@ -34,13 +34,13 @@ import {
   ApiBody,
   ApiParam,
 } from '@nestjs/swagger';
-import { CloudinaryService } from '../common/services/cloudinary.service';
+import { CloudinaryService } from './cloudinary.service';
 import {
   FileUploadDto,
   MultipleFileUploadDto,
   FileUploadResponseDto,
   DeleteFileDto,
-} from '../common/dto/file-upload.dto';
+} from '../../common/dto/file-upload.dto';
 import { ConfigService } from '@nestjs/config';
 
 @ApiTags('File Upload')

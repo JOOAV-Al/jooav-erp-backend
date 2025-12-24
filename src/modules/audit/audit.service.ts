@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { AppLogger } from '../utils/logger.service';
+import { AppLogger } from '../../common/utils/logger.service';
 
 export interface AuditLogData {
   userId?: string;
@@ -15,7 +15,7 @@ export interface AuditLogData {
 }
 
 @Injectable()
-export class AuditLogService {
+export class AuditService {
   constructor(private prisma: PrismaService) {}
 
   /**
