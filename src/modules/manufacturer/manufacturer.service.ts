@@ -57,8 +57,9 @@ export class ManufacturerService {
       select: { name: true },
     });
 
-    const duplicateExists = existingManufacturers.some(manufacturer => 
-      this.normalizeManufacturerName(manufacturer.name) === normalizedName
+    const duplicateExists = existingManufacturers.some(
+      (manufacturer) =>
+        this.normalizeManufacturerName(manufacturer.name) === normalizedName,
     );
 
     if (duplicateExists) {
@@ -266,8 +267,9 @@ export class ManufacturerService {
         select: { name: true },
       });
 
-      const duplicateExists = existingManufacturers.some(manufacturer => 
-        this.normalizeManufacturerName(manufacturer.name) === normalizedName
+      const duplicateExists = existingManufacturers.some(
+        (manufacturer) =>
+          this.normalizeManufacturerName(manufacturer.name) === normalizedName,
       );
 
       if (duplicateExists) {
