@@ -8,7 +8,7 @@ import { WinstonModule } from 'nest-winston';
 
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PrismaService } from './database/prisma.service';
+import { PrismaService } from './modules/prisma/prisma.service';
 import { HealthController } from './health/health.controller';
 
 // Configuration
@@ -45,6 +45,7 @@ import { PrismaModule } from './modules/prisma/prisma.module';
 import { AdminModule } from './admin/admin.module';
 import { ManufacturerModule } from './modules/manufacturer/manufacturer.module';
 import { BrandModule } from './modules/brand/brand.module';
+import { CategoryModule } from './modules/category/category.module';
 import { SentryModule } from '@sentry/nestjs/setup';
 
 @Module({
@@ -106,6 +107,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
     StorageModule,
     ManufacturerModule,
     BrandModule,
+    CategoryModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

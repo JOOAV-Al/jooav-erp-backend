@@ -5,7 +5,7 @@ import {
   HealthCheck,
   PrismaHealthIndicator,
 } from '@nestjs/terminus';
-import { PrismaService } from '../database/prisma.service';
+import { PrismaService } from '../modules/prisma/prisma.service';
 import { CacheService } from '../modules/cache/cache.service';
 
 @ApiTags('Health')

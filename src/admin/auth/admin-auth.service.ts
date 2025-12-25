@@ -10,7 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UserRole, UserStatus, AdminAction } from '@prisma/client';
 import * as argon2 from 'argon2';
 
-import { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../../modules/prisma/prisma.service';
 import { AuditService } from '../../modules/audit/audit.service';
 import {
   AdminLoginDto,
