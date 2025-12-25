@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { Prisma, BrandStatus } from '@prisma/client';
-import { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CloudinaryService } from '../storage/cloudinary.service';
 import { StringUtils } from '../../common/utils/helpers.utils';
