@@ -55,6 +55,9 @@ model User {
   createdBrands        Brand[]            @relation("CreatedBrands")
   updatedBrands        Brand[]            @relation("UpdatedBrands")
   deletedBrands        Brand[]            @relation("DeletedBrands")
+  createdCategories    Category[]         @relation("CreatedCategories")
+  updatedCategories    Category[]         @relation("UpdatedCategories")
+  deletedCategories    Category[]         @relation("DeletedCategories")
 
   @@map("users")
 }
@@ -156,13 +159,42 @@ model Customer {
   @@map("customers")
 }
 
+model Category {
+  id          String        @id @default(cuid())
+  name        String
+  slug        String        @unique // URL-friendly name
+  description String?
+  
+  parentId    String?       // For subcategories
+  isActive    Boolean       @default(true)
+  sortOrder   Int           @default(0) // Display order
+  
+  // Audit fields
+  createdBy   String
+  updatedBy   String
+  deletedBy   String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+  
+  // Relations
+  parent          Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children        Category[] @relation("CategoryHierarchy")
+  createdByUser   User       @relation("CreatedCategories", fields: [createdBy], references: [id])
+  updatedByUser   User       @relation("UpdatedCategories", fields: [updatedBy], references: [id])
+  deletedByUser   User?      @relation("DeletedCategories", fields: [deletedBy], references: [id])
+  
+  @@unique([name, parentId]) // Category name unique within same parent level
+  @@map("categories")
+}
+
 model Product {
   id             String        @id @default(cuid())
   name           String
   description    String?
   sku            String        @unique
   barcode        String?       @unique
-  category       String
+  category       String        // Keep this for now, will migrate later
   price          Decimal       @db.Decimal(10, 2)
   costPrice      Decimal?      @db.Decimal(10, 2)
   stock          Int           @default(0)
