@@ -8,7 +8,6 @@ import {
   Delete,
   Query,
   HttpStatus,
-  HttpCode,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -35,8 +34,8 @@ import { CurrentUserId } from '../../common/decorators/current-user.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AuditLog } from '../../common/decorators/audit-log.decorator';
-import { UserRole } from 'src/common/enums';
-import { UnifiedAuthGuard } from 'src/common/guards/unified-auth.guard';
+import { UserRole } from '../../common/enums/';
+import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 
 @ApiTags('Products')
 @Controller('api/v1/products')
