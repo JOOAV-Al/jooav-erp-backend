@@ -157,48 +157,198 @@ async function main() {
     }),
   ]);
 
+  // Collect users for easy reference
+  const users = [superAdmin, admin, subAdmin, smeUser];
+
+  // Create sample manufacturers
+  const manufacturers = await Promise.all([
+    prisma.manufacturer.create({
+      data: {
+        name: 'Nestle Nigeria Plc',
+        description: 'Leading food and beverage company',
+        email: 'info@nestle.com.ng',
+        phone: '+234-1-280-0000',
+        website: 'https://www.nestle-cwa.com/en/nestle-nigeria',
+        address: '22-24 Industrial Avenue, Ilupeju',
+        city: 'Lagos',
+        state: 'Lagos',
+        country: 'Nigeria',
+        postalCode: '100001',
+        registrationNumber: 'RC123456',
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.manufacturer.create({
+      data: {
+        name: 'Coca-Cola Nigeria Limited',
+        description: 'The Coca-Cola System in Nigeria',
+        email: 'info@coca-colanigeria.com',
+        phone: '+234-1-271-5151',
+        website: 'https://www.coca-colanigeria.com',
+        address: 'Coca-Cola Place, Lagos-Ibadan Expressway',
+        city: 'Lagos',
+        state: 'Lagos',
+        country: 'Nigeria',
+        postalCode: '100001',
+        registrationNumber: 'RC789012',
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+  ]);
+
+  // Create sample categories
+  const categories = await Promise.all([
+    prisma.category.create({
+      data: {
+        name: 'Food & Beverages',
+        description: 'Food and beverage products',
+        slug: 'food-beverages',
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Instant Noodles',
+        description: 'Quick cooking noodles',
+        slug: 'instant-noodles',
+        parentId: null, // Will be set after creating the parent
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Soft Drinks',
+        description: 'Carbonated and non-carbonated drinks',
+        slug: 'soft-drinks',
+        parentId: null, // Will be set after creating the parent
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.category.create({
+      data: {
+        name: 'Dairy Products',
+        description: 'Milk and dairy products',
+        slug: 'dairy-products',
+        parentId: null, // Will be set after creating the parent
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+  ]);
+
+  // Update subcategories with parent
+  await prisma.category.update({
+    where: { id: categories[1].id },
+    data: { parentId: categories[0].id },
+  });
+  await prisma.category.update({
+    where: { id: categories[2].id },
+    data: { parentId: categories[0].id },
+  });
+  await prisma.category.update({
+    where: { id: categories[3].id },
+    data: { parentId: categories[0].id },
+  });
+
+  // Create sample brands
+  const brands = await Promise.all([
+    prisma.brand.create({
+      data: {
+        name: 'Indomie',
+        description: 'Popular instant noodles brand',
+        manufacturerId: manufacturers[0].id,
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.brand.create({
+      data: {
+        name: 'Coca-Cola',
+        description: 'World famous cola brand',
+        manufacturerId: manufacturers[1].id,
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.brand.create({
+      data: {
+        name: 'Peak',
+        description: 'Premium milk brand',
+        manufacturerId: manufacturers[0].id,
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+  ]);
+
   // Create sample products
   const products = await Promise.all([
     prisma.product.create({
       data: {
-        name: 'Laptop Computer',
-        description: 'High-performance business laptop',
-        sku: 'LAP-001',
-        barcode: '1234567890123',
-        category: 'Electronics',
-        price: 150000.0,
-        costPrice: 120000.0,
-        stock: 50,
-        minStock: 10,
-        images: ['laptop1.jpg', 'laptop2.jpg'],
+        name: 'Indomie Chicken Curry 70g (Single Pack)',
+        description: 'Delicious instant noodles with chicken curry flavor',
+        sku: 'INDOMIE-CHICKEN-CURRY-70G-SINGLE-PACK',
+        barcode: '8901058005042',
+        nafdacNumber: 'A1-1234',
+        brandId: brands[0].id,
+        manufacturerId: manufacturers[0].id,
+        categoryId:
+          categories.find((c) => c.name === 'Instant Noodles')?.id ||
+          categories[0].id,
+        variant: 'Chicken Curry',
+        packSize: '70g',
+        packagingType: 'Single Pack',
+        price: 120.0,
+        images: ['indomie-chicken.jpg'],
+        createdBy: users[0].id,
+        updatedBy: users[0].id,
       },
     }),
     prisma.product.create({
       data: {
-        name: 'Office Chair',
-        description: 'Ergonomic office chair with lumbar support',
-        sku: 'CHR-001',
-        barcode: '2345678901234',
-        category: 'Furniture',
-        price: 45000.0,
-        costPrice: 35000.0,
-        stock: 25,
-        minStock: 5,
-        images: ['chair1.jpg', 'chair2.jpg'],
+        name: 'Coca Cola Classic 500ml (PET Bottle)',
+        description: 'Refreshing cola soft drink',
+        sku: 'COCA-COLA-CLASSIC-500ML-PET-BOTTLE',
+        barcode: '5449000000996',
+        brandId: brands[1].id,
+        manufacturerId: manufacturers[1].id,
+        categoryId:
+          categories.find((c) => c.name === 'Soft Drinks')?.id ||
+          categories[0].id,
+        variant: 'Classic',
+        packSize: '500ml',
+        packagingType: 'PET Bottle',
+        price: 200.0,
+        images: ['coca-cola-500ml.jpg'],
+        createdBy: users[0].id,
+        updatedBy: users[0].id,
       },
     }),
     prisma.product.create({
       data: {
-        name: 'Wireless Mouse',
-        description: 'Bluetooth wireless mouse',
-        sku: 'MSE-001',
-        barcode: '3456789012345',
-        category: 'Electronics',
-        price: 8000.0,
-        costPrice: 6000.0,
-        stock: 100,
-        minStock: 20,
-        images: ['mouse1.jpg'],
+        name: 'Peak Milk Powder 400g (Tin)',
+        description: 'Premium quality milk powder for families',
+        sku: 'PEAK-MILK-POWDER-400G-TIN',
+        barcode: '8901058123456',
+        nafdacNumber: 'A1-5678',
+        brandId: brands.find((b) => b.name === 'Peak')?.id || brands[0].id,
+        manufacturerId: manufacturers[0].id,
+        categoryId:
+          categories.find((c) => c.name === 'Dairy Products')?.id ||
+          categories[0].id,
+        variant: 'Milk Powder',
+        packSize: '400g',
+        packagingType: 'Tin',
+        price: 1500.0,
+        expiryDate: new Date('2025-12-31'),
+        images: ['peak-milk-400g.jpg'],
+        createdBy: users[0].id,
+        updatedBy: users[0].id,
       },
     }),
   ]);

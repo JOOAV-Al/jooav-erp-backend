@@ -216,7 +216,7 @@ export class ManufacturerService {
             id: true,
             name: true,
             sku: true,
-            status: true,
+            isActive: true,
             price: true,
           },
           take: 10, // Limit to first 10 products
@@ -412,7 +412,7 @@ export class ManufacturerService {
 
     // Check if manufacturer has active products
     const activeProducts = manufacturer.products.filter(
-      (p) => p.status === 'ACTIVE',
+      (p) => p.isActive === true,
     );
     if (activeProducts.length > 0) {
       throw new BadRequestException(
