@@ -189,6 +189,75 @@ export class CategoryService {
   }
 
   /**
+   * Get all subcategories (categories that have a parent) with pagination
+   */
+  async getSubcategories(
+    query: CategoryQueryDto,
+  ): Promise<PaginatedResponse<CategoryResponseDto>> {
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      isActive,
+      includeProductCount = false,
+    } = query;
+
+    const skip = (page - 1) * limit;
+
+    // Build where conditions - only include categories that have a parent (subcategories)
+    const where: any = {
+      deletedAt: null,
+      parentId: { not: null }, // Only subcategories
+      ...(isActive !== undefined && { isActive }),
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ],
+      }),
+    };
+
+    // Get subcategories with pagination
+    const [subcategories, totalItems] = await Promise.all([
+      this.prisma.category.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        include: {
+          parent: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              description: true,
+              isActive: true,
+            },
+          },
+          ...(includeProductCount && {
+            _count: {
+              select: { products: true },
+            },
+          }),
+        },
+      }),
+      this.prisma.category.count({ where }),
+    ]);
+
+    // Transform to response DTOs
+    const transformedSubcategories = subcategories.map((subcategory) =>
+      this.transformToResponseDto(subcategory),
+    );
+
+    return new PaginatedResponse(
+      transformedSubcategories,
+      page,
+      limit,
+      totalItems,
+    );
+  }
+
+  /**
    * Get category tree (all major categories with their subcategories)
    */
   async getCategoryTree(): Promise<CategoryResponseDto[]> {
