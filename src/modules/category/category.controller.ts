@@ -113,6 +113,38 @@ export class CategoryController {
     return this.categoryService.getCategoryTree();
   }
 
+  @Get('subcategories')
+  @ApiOperation({
+    summary: 'Get all subcategories (categories with parent) with pagination',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subcategories retrieved successfully',
+    type: PaginatedResponse<CategoryResponseDto>,
+  })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: 'Search by subcategory name',
+  })
+  @ApiQuery({
+    name: 'isActive',
+    required: false,
+    description: 'Filter by active status',
+  })
+  @ApiQuery({
+    name: 'includeProductCount',
+    required: false,
+    description: 'Include product count per subcategory',
+  })
+  async getSubcategories(
+    @Query() query: CategoryQueryDto,
+  ): Promise<PaginatedResponse<CategoryResponseDto>> {
+    return this.categoryService.getSubcategories(query);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a category by ID' })
   @ApiParam({ name: 'id', description: 'Category ID' })

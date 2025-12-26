@@ -58,6 +58,9 @@ model User {
   createdCategories    Category[]         @relation("CreatedCategories")
   updatedCategories    Category[]         @relation("UpdatedCategories")
   deletedCategories    Category[]         @relation("DeletedCategories")
+  createdProducts      Product[]          @relation("CreatedProducts")
+  updatedProducts      Product[]          @relation("UpdatedProducts")
+  deletedProducts      Product[]          @relation("DeletedProducts")
 
   @@map("users")
 }
@@ -180,6 +183,7 @@ model Category {
   // Relations
   parent          Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
   children        Category[] @relation("CategoryHierarchy")
+  products        Product[]  // Products under this category
   createdByUser   User       @relation("CreatedCategories", fields: [createdBy], references: [id])
   updatedByUser   User       @relation("UpdatedCategories", fields: [updatedBy], references: [id])
   deletedByUser   User?      @relation("DeletedCategories", fields: [deletedBy], references: [id])
@@ -189,32 +193,58 @@ model Category {
 }
 
 model Product {
-  id             String        @id @default(cuid())
-  name           String
-  description    String?
-  sku            String        @unique
-  barcode        String?       @unique
-  category       String        // Keep this for now, will migrate later
-  price          Decimal       @db.Decimal(10, 2)
-  costPrice      Decimal?      @db.Decimal(10, 2)
-  stock          Int           @default(0)
-  minStock       Int           @default(0)
-  maxStock       Int?
-  status         ProductStatus @default(ACTIVE)
-  images         String[]
-  manufacturerId String? // Manufacturer who produces this product
-  brandId        String? // Brand this product belongs to
-
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id              String        @id @default(cuid())
+  
+  // Basic Product Information
+  name            String        // Generated: Brand Variant PackSize (PackType)
+  description     String?
+  sku             String        @unique // Auto-generated: Brand Variant PackSize (PackType)
+  barcode         String?       @unique // UPC/EAN barcode
+  nafdacNumber    String?       // NAFDAC registration number (optional)
+  
+  // Product Classification & Relations
+  brandId         String
+  categoryId      String        // Links to Category (can be subcategory)
+  manufacturerId  String        // Links to Manufacturer
+  
+  // Product Specifications
+  variant         String        // e.g., "Chicken", "Pepper Soup", "Classic Vanilla"
+  packSize        String        // e.g., "70g", "500ml", "1kg", "150g Family Pack"
+  packagingType   String        // e.g., "Single Pack", "5-Pack", "Box", "PET Bottle", "Tin"
+  
+  // Pricing (Wholesale price)
+  price           Decimal       @db.Decimal(10,2)
+  
+  // FMCG Specific
+  expiryDate      DateTime?     // For perishable goods
+  
+  // Media (Optional - uses default if empty)
+  images          Json[]        // Array of image URLs (first one is primary)
+  
+  // Status
+  isActive        Boolean       @default(true)
+  
+  // Audit fields
+  createdBy       String
+  updatedBy       String
+  deletedBy       String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+  
   // Relations
-  manufacturer   Manufacturer?   @relation("ManufacturerProducts", fields: [manufacturerId], references: [id])
-  brand          Brand?          @relation("BrandProducts", fields: [brandId], references: [id])
-  orderItems     OrderItem[]
-  stockMovements StockMovement[]
-
+  brand           Brand         @relation("BrandProducts", fields: [brandId], references: [id])
+  category        Category      @relation(fields: [categoryId], references: [id])
+  manufacturer    Manufacturer  @relation("ManufacturerProducts", fields: [manufacturerId], references: [id])
+  
+  createdByUser   User          @relation("CreatedProducts", fields: [createdBy], references: [id])
+  updatedByUser   User          @relation("UpdatedProducts", fields: [updatedBy], references: [id])
+  deletedByUser   User?         @relation("DeletedProducts", fields: [deletedBy], references: [id])
+  
+  // Relations to other models
+  orderItems      OrderItem[]
+  stockMovements  StockMovement[]
+  
   @@map("products")
 }
 
