@@ -131,32 +131,6 @@ async function main() {
     },
   });
 
-  // Create sample customers
-  const customers = await Promise.all([
-    prisma.customer.create({
-      data: {
-        companyName: 'Tech Solutions Ltd',
-        contactName: 'Alice Johnson',
-        email: 'alice@techsolutions.com',
-        phone: '+234-801-234-5678',
-        address: '123 Business District',
-        city: 'Lagos',
-        country: 'Nigeria',
-      },
-    }),
-    prisma.customer.create({
-      data: {
-        companyName: 'Global Enterprises',
-        contactName: 'Bob Smith',
-        email: 'bob@globalenterprises.com',
-        phone: '+234-802-345-6789',
-        address: '456 Corporate Avenue',
-        city: 'Abuja',
-        country: 'Nigeria',
-      },
-    }),
-  ]);
-
   // Collect users for easy reference
   const users = [superAdmin, admin, subAdmin, smeUser];
 
@@ -353,34 +327,6 @@ async function main() {
     }),
   ]);
 
-  // Create sample projects
-  const project = await prisma.project.create({
-    data: {
-      name: 'ERP System Implementation',
-      description:
-        'Implementation of the new ERP system for business operations',
-      startDate: new Date(),
-      endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days from now
-      budget: 500000.0,
-      tasks: {
-        create: [
-          {
-            title: 'Setup Database',
-            description: 'Configure and setup the production database',
-            assignedId: subAdmin.id,
-            dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-          },
-          {
-            title: 'Develop User Interface',
-            description: 'Create responsive user interface for the application',
-            assignedId: subAdmin.id,
-            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-          },
-        ],
-      },
-    },
-  });
-
   // Create system configurations
   await prisma.systemConfig.createMany({
     data: [
@@ -412,9 +358,7 @@ async function main() {
   console.log(
     `   - ${4} Users (1 Super Admin, 1 Admin, 1 Sub-Admin, 1 SME User)`,
   );
-  console.log(`   - ${customers.length} Customers`);
   console.log(`   - ${products.length} Products`);
-  console.log(`   - ${1} Project with ${2} Tasks`);
   console.log(`   - ${5} System Configurations`);
 }
 
