@@ -46,6 +46,7 @@ import { AdminModule } from './admin/admin.module';
 import { ManufacturerModule } from './modules/manufacturer/manufacturer.module';
 import { BrandModule } from './modules/brand/brand.module';
 import { CategoryModule } from './modules/category/category.module';
+import { ProductModule } from './modules/product/product.module';
 import { SentryModule } from '@sentry/nestjs/setup';
 
 @Module({
@@ -108,6 +109,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
     ManufacturerModule,
     BrandModule,
     CategoryModule,
+    ProductModule,
   ],
   controllers: [AppController, HealthController],
   providers: [
