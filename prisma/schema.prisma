@@ -55,6 +55,9 @@ model User {
   createdBrands        Brand[]            @relation("CreatedBrands")
   updatedBrands        Brand[]            @relation("UpdatedBrands")
   deletedBrands        Brand[]            @relation("DeletedBrands")
+  createdVariants      Variant[]          @relation("CreatedVariants")
+  updatedVariants      Variant[]          @relation("UpdatedVariants")
+  deletedVariants      Variant[]          @relation("DeletedVariants")
   createdCategories    Category[]         @relation("CreatedCategories")
   updatedCategories    Category[]         @relation("UpdatedCategories")
   deletedCategories    Category[]         @relation("DeletedCategories")
@@ -192,6 +195,31 @@ model Category {
   @@map("categories")
 }
 
+model Variant {
+  id          String  @id @default(cuid())
+  name        String  // e.g., "Chicken", "Pepper Soup", "Classic Vanilla"
+  description String? // Optional description for the variant
+  brandId     String
+
+  // Audit fields
+  createdBy String
+  updatedBy String
+  deletedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  // Relations
+  brand         Brand     @relation("BrandVariants", fields: [brandId], references: [id])
+  products      Product[] @relation("VariantProducts")
+  createdByUser User      @relation("CreatedVariants", fields: [createdBy], references: [id])
+  updatedByUser User      @relation("UpdatedVariants", fields: [updatedBy], references: [id])
+  deletedByUser User?     @relation("DeletedVariants", fields: [deletedBy], references: [id])
+
+  @@unique([name, brandId]) // Variant name unique per brand
+  @@map("variants")
+}
+
 model Product {
   id              String        @id @default(cuid())
   
@@ -199,27 +227,25 @@ model Product {
   name            String        // Generated: Brand Variant PackSize (PackType)
   description     String?
   sku             String        @unique // Auto-generated: Brand Variant PackSize (PackType)
-  barcode         String?       @unique // UPC/EAN barcode
   nafdacNumber    String?       // NAFDAC registration number (optional)
   
   // Product Classification & Relations
   brandId         String
+  variantId       String        // Links to Variant entity
   categoryId      String        // Links to Category (can be subcategory)
   manufacturerId  String        // Links to Manufacturer
   
   // Product Specifications
-  variant         String        // e.g., "Chicken", "Pepper Soup", "Classic Vanilla"
   packSize        String        // e.g., "70g", "500ml", "1kg", "150g Family Pack"
   packagingType   String        // e.g., "Single Pack", "5-Pack", "Box", "PET Bottle", "Tin"
   
   // Pricing (Wholesale price)
   price           Decimal       @db.Decimal(10,2)
+  discount        Decimal?      @db.Decimal(5,2) // Discount percentage (0-100)
   
-  // FMCG Specific
-  expiryDate      DateTime?     // For perishable goods
-  
-  // Media (Optional - uses default if empty)
+  // Media
   images          Json[]        // Array of image URLs (first one is primary)
+  thumbnail       String?       // Primary thumbnail image URL
   
   // Status
   isActive        Boolean       @default(true)
@@ -234,6 +260,7 @@ model Product {
   
   // Relations
   brand           Brand         @relation("BrandProducts", fields: [brandId], references: [id])
+  variant         Variant       @relation("VariantProducts", fields: [variantId], references: [id])
   category        Category      @relation(fields: [categoryId], references: [id])
   manufacturer    Manufacturer  @relation("ManufacturerProducts", fields: [manufacturerId], references: [id])
   
@@ -543,6 +570,7 @@ model Brand {
 
   // Relations
   manufacturer  Manufacturer @relation("ManufacturerBrands", fields: [manufacturerId], references: [id])
+  variants      Variant[]    @relation("BrandVariants")
   products      Product[]    @relation("BrandProducts")
   createdByUser User         @relation("CreatedBrands", fields: [createdBy], references: [id])
   updatedByUser User         @relation("UpdatedBrands", fields: [updatedBy], references: [id])

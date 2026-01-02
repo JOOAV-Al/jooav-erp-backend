@@ -1,0 +1,408 @@
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import {
+  CreateVariantDto,
+  UpdateVariantDto,
+  VariantQueryDto,
+  VariantResponseDto,
+  VariantStatsDto,
+} from './dto';
+import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
+import { AuditLog } from '../../common/decorators/audit-log.decorator';
+
+@Injectable()
+export class VariantService {
+  constructor(private prisma: PrismaService) {}
+
+  @AuditLog({
+    action: 'CREATE',
+    resource: 'VARIANT',
+  })
+  async create(
+    createVariantDto: CreateVariantDto,
+    userId: string,
+  ): Promise<VariantResponseDto> {
+    const { name, description, brandId } = createVariantDto;
+
+    // Check if brand exists
+    const brand = await this.prisma.brand.findUnique({
+      where: { id: brandId, deletedAt: null },
+    });
+
+    if (!brand) {
+      throw new BadRequestException('Brand not found');
+    }
+
+    // Check if variant name already exists for this brand
+    const existingVariant = await this.prisma.variant.findFirst({
+      where: {
+        name: { equals: name, mode: 'insensitive' },
+        brandId,
+        deletedAt: null,
+      },
+    });
+
+    if (existingVariant) {
+      throw new ConflictException(
+        `Variant with name "${name}" already exists for this brand`,
+      );
+    }
+
+    const variant = await this.prisma.variant.create({
+      data: {
+        name,
+        description,
+        brandId,
+        createdBy: userId,
+        updatedBy: userId,
+      },
+      include: {
+        brand: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        _count: {
+          select: {
+            products: true,
+          },
+        },
+      },
+    });
+
+    return variant as VariantResponseDto;
+  }
+
+  async findAll(
+    query: VariantQueryDto,
+    includes?: {
+      includeBrand?: boolean;
+      includeProductsCount?: boolean;
+      includeAuditInfo?: boolean;
+    },
+  ): Promise<PaginatedResponse<VariantResponseDto>> {
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      brandId,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+    } = query;
+
+    // Convert string params to numbers
+    const pageNum = typeof page === 'string' ? parseInt(page, 10) : page;
+    const limitNum = typeof limit === 'string' ? parseInt(limit, 10) : limit;
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: Prisma.VariantWhereInput = {
+      deletedAt: null,
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          { brand: { name: { contains: search, mode: 'insensitive' } } },
+        ],
+      }),
+      ...(brandId && { brandId }),
+    };
+
+    const orderBy: Prisma.VariantOrderByWithRelationInput = {
+      [sortBy]: sortOrder,
+    };
+
+    // Build dynamic include object
+    const includeObject: any = {};
+
+    // Include brand if requested
+    if (includes?.includeBrand === true) {
+      includeObject.brand = {
+        select: {
+          id: true,
+          name: true,
+        },
+      };
+    }
+
+    // Include products count if requested
+    if (includes?.includeProductsCount === true) {
+      includeObject._count = {
+        select: {
+          products: true,
+        },
+      };
+    }
+
+    // Include audit info if requested
+    if (includes?.includeAuditInfo === true) {
+      includeObject.createdByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+      includeObject.updatedByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+      includeObject.deletedByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+    }
+
+    const [variants, totalCount] = await Promise.all([
+      this.prisma.variant.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy,
+        include: includeObject,
+      }),
+      this.prisma.variant.count({ where }),
+    ]);
+
+    const totalPages = Math.ceil(totalCount / limitNum);
+
+    return {
+      data: variants as VariantResponseDto[],
+      meta: {
+        page: pageNum,
+        limit: limitNum,
+        totalItems: totalCount,
+        totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPreviousPage: pageNum > 1,
+      },
+    };
+  }
+
+  async findOne(
+    id: string,
+    includes?: {
+      includeBrand?: boolean;
+      includeProductsCount?: boolean;
+      includeAuditInfo?: boolean;
+    },
+  ): Promise<VariantResponseDto> {
+    // Build dynamic include object
+    const includeObject: any = {};
+
+    // Include brand if requested
+    if (includes?.includeBrand === true) {
+      includeObject.brand = {
+        select: {
+          id: true,
+          name: true,
+        },
+      };
+    }
+
+    // Include products count if requested
+    if (includes?.includeProductsCount === true) {
+      includeObject._count = {
+        select: {
+          products: true,
+        },
+      };
+    }
+
+    // Include audit info if requested
+    if (includes?.includeAuditInfo === true) {
+      includeObject.createdByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+      includeObject.updatedByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+      includeObject.deletedByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+    }
+
+    const variant = await this.prisma.variant.findFirst({
+      where: { id, deletedAt: null },
+      include: includeObject,
+    });
+
+    if (!variant) {
+      throw new NotFoundException('Variant not found');
+    }
+
+    return variant as VariantResponseDto;
+  }
+
+  @AuditLog({
+    action: 'UPDATE',
+    resource: 'VARIANT',
+  })
+  async update(
+    id: string,
+    updateVariantDto: UpdateVariantDto,
+    userId: string,
+  ): Promise<VariantResponseDto> {
+    const { name, description, brandId } = updateVariantDto;
+
+    // Check if variant exists
+    const existingVariant = await this.prisma.variant.findFirst({
+      where: { id, deletedAt: null },
+    });
+
+    if (!existingVariant) {
+      throw new NotFoundException('Variant not found');
+    }
+
+    // If name is being updated, check for duplicates
+    if (name && name !== existingVariant.name) {
+      const duplicateVariant = await this.prisma.variant.findFirst({
+        where: {
+          name: { equals: name, mode: 'insensitive' },
+          brandId: brandId || existingVariant.brandId,
+          deletedAt: null,
+          id: { not: id },
+        },
+      });
+
+      if (duplicateVariant) {
+        throw new ConflictException(
+          `Variant with name "${name}" already exists for this brand`,
+        );
+      }
+    }
+
+    // If brandId is being updated, check if brand exists
+    if (brandId && brandId !== existingVariant.brandId) {
+      const brand = await this.prisma.brand.findUnique({
+        where: { id: brandId, deletedAt: null },
+      });
+
+      if (!brand) {
+        throw new BadRequestException('Brand not found');
+      }
+    }
+
+    const updatedVariant = await this.prisma.variant.update({
+      where: { id },
+      data: {
+        ...(name && { name }),
+        ...(description !== undefined && { description }),
+        ...(brandId && { brandId }),
+        updatedBy: userId,
+      },
+      include: {
+        brand: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        _count: {
+          select: {
+            products: true,
+          },
+        },
+      },
+    });
+
+    return updatedVariant as VariantResponseDto;
+  }
+
+  @AuditLog({
+    action: 'DELETE',
+    resource: 'VARIANT',
+  })
+  async remove(id: string, userId: string): Promise<{ message: string }> {
+    // Check if variant exists
+    const existingVariant = await this.prisma.variant.findFirst({
+      where: { id, deletedAt: null },
+      include: {
+        _count: {
+          select: {
+            products: true,
+          },
+        },
+      },
+    });
+
+    if (!existingVariant) {
+      throw new NotFoundException('Variant not found');
+    }
+
+    // Check if variant has associated products
+    if (existingVariant._count.products > 0) {
+      throw new BadRequestException(
+        'Cannot delete variant with associated products. Please remove or reassign all products first.',
+      );
+    }
+
+    // Soft delete
+    await this.prisma.variant.update({
+      where: { id },
+      data: {
+        deletedBy: userId,
+        deletedAt: new Date(),
+      },
+    });
+
+    return { message: 'Variant deleted successfully' };
+  }
+
+  async getStats(): Promise<VariantStatsDto> {
+    // Get total variants count
+    const totalVariants = await this.prisma.variant.count({
+      where: { deletedAt: null },
+    });
+
+    // Get variants by brand
+    const variantsByBrandData = await this.prisma.variant.groupBy({
+      by: ['brandId'],
+      where: { deletedAt: null },
+      _count: true,
+    });
+
+    // Transform to brand name: count format
+    const variantsByBrand: Record<string, number> = {};
+    for (const item of variantsByBrandData) {
+      // Note: We'll need to fetch brand names separately since groupBy doesn't support include
+      const brand = await this.prisma.brand.findUnique({
+        where: { id: item.brandId },
+        select: { name: true },
+      });
+      if (brand) {
+        variantsByBrand[brand.name] = item._count;
+      }
+    }
+
+    // Get most popular variants by product count
+    const popularVariantsData = await this.prisma.variant.findMany({
+      where: { deletedAt: null },
+      select: {
+        name: true,
+        _count: {
+          select: {
+            products: true,
+          },
+        },
+      },
+      orderBy: {
+        products: {
+          _count: 'desc',
+        },
+      },
+      take: 10,
+    });
+
+    const popularVariants = popularVariantsData.map((variant) => ({
+      name: variant.name,
+      productCount: variant._count.products,
+    }));
+
+    return {
+      totalVariants,
+      variantsByBrand,
+      popularVariants,
+    };
+  }
+}
