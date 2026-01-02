@@ -38,13 +38,6 @@ export class ProductResponseDto {
   // barcode: string | null;
 
   @ApiProperty({
-    description: 'NAFDAC registration number',
-    example: 'A1-1234',
-    required: false,
-  })
-  nafdacNumber: string | null;
-
-  @ApiProperty({
     description: 'Brand ID',
     example: 'cm123def-1234-5678-90ab-123456789def',
   })

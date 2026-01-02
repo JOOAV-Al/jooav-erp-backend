@@ -227,7 +227,6 @@ model Product {
   name            String        // Generated: Brand Variant PackSize (PackType)
   description     String?
   sku             String        @unique // Auto-generated: Brand Variant PackSize (PackType)
-  nafdacNumber    String?       // NAFDAC registration number (optional)
   
   // Product Classification & Relations
   brandId         String

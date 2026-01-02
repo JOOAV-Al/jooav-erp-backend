@@ -37,14 +37,6 @@ export class CreateProductDto {
   barcode?: string;
 
   @ApiProperty({
-    description: 'NAFDAC registration number (for Nigerian products)',
-    example: 'A1-1234',
-  })
-  @IsOptional()
-  @IsString()
-  nafdacNumber?: string;
-
-  @ApiProperty({
     description: 'Brand ID that this product belongs to',
     example: '',
   })

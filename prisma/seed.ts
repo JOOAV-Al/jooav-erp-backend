@@ -298,7 +298,6 @@ async function main() {
         name: 'Indomie Chicken Curry 70g (Single Pack)',
         description: 'Delicious instant noodles with chicken curry flavor',
         sku: 'INDOMIE-CHICKEN-CURRY-70G-SINGLE-PACK',
-        nafdacNumber: 'A1-1234',
         brandId: brands[0].id,
         variantId: variants[0].id,
         manufacturerId: manufacturers[0].id,
