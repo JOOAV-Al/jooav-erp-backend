@@ -45,6 +45,7 @@ import { PrismaModule } from './modules/prisma/prisma.module';
 import { AdminModule } from './admin/admin.module';
 import { ManufacturerModule } from './modules/manufacturer/manufacturer.module';
 import { BrandModule } from './modules/brand/brand.module';
+import { VariantModule } from './modules/variant/variant.module';
 import { CategoryModule } from './modules/category/category.module';
 import { ProductModule } from './modules/product/product.module';
 import { SentryModule } from '@sentry/nestjs/setup';
@@ -108,6 +109,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
     StorageModule,
     ManufacturerModule,
     BrandModule,
+    VariantModule,
     CategoryModule,
     ProductModule,
   ],

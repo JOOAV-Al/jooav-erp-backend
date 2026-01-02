@@ -130,6 +130,24 @@ export class ManufacturerController {
     type: String,
     description: 'Filter by state',
   })
+  @ApiQuery({
+    name: 'includeBrands',
+    required: false,
+    type: Boolean,
+    description: 'Include brands in response',
+  })
+  @ApiQuery({
+    name: 'includeProducts',
+    required: false,
+    type: Boolean,
+    description: 'Include products in response',
+  })
+  @ApiQuery({
+    name: 'includeAuditInfo',
+    required: false,
+    type: Boolean,
+    description: 'Include audit information (createdBy, updatedBy, etc.)',
+  })
   @ApiResponse({
     status: 200,
     description: 'List of manufacturers retrieved successfully',
@@ -155,7 +173,17 @@ export class ManufacturerController {
       state: queryDto.state,
     };
 
-    return this.manufacturerService.findAll(paginationDto, filtersDto);
+    const includesDto = {
+      includeBrands: queryDto.includeBrands,
+      includeProducts: queryDto.includeProducts,
+      includeAuditInfo: queryDto.includeAuditInfo,
+    };
+    console.log('Include parameters received:', includesDto);
+    return this.manufacturerService.findAll(
+      paginationDto,
+      filtersDto,
+      includesDto,
+    );
   }
 
   @Get('stats')
@@ -185,6 +213,24 @@ export class ManufacturerController {
     description: 'Retrieve detailed information about a specific manufacturer',
   })
   @ApiParam({ name: 'id', description: 'Manufacturer ID' })
+  @ApiQuery({
+    name: 'includeBrands',
+    required: false,
+    type: Boolean,
+    description: 'Include brands in response (default: true)',
+  })
+  @ApiQuery({
+    name: 'includeProducts',
+    required: false,
+    type: Boolean,
+    description: 'Include products in response (default: true)',
+  })
+  @ApiQuery({
+    name: 'includeAuditInfo',
+    required: false,
+    type: Boolean,
+    description: 'Include audit information (default: true)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Manufacturer details retrieved successfully',
@@ -198,8 +244,19 @@ export class ManufacturerController {
     status: 403,
     description: 'Forbidden - Admin access required',
   })
-  async findOne(@Param('id') id: string): Promise<ManufacturerResponseDto> {
-    return this.manufacturerService.findOne(id);
+  async findOne(
+    @Param('id') id: string,
+    @Query('includeBrands') includeBrands?: boolean,
+    @Query('includeProducts') includeProducts?: boolean,
+    @Query('includeAuditInfo') includeAuditInfo?: boolean,
+  ): Promise<ManufacturerResponseDto> {
+    const includesDto = {
+      includeBrands,
+      includeProducts,
+      includeAuditInfo,
+    };
+
+    return this.manufacturerService.findOne(id, includesDto);
   }
 
   @Patch(':id')
