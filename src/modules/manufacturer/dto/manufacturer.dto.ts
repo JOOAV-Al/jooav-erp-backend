@@ -7,7 +7,9 @@ import {
   MaxLength,
   MinLength,
   Matches,
+  IsBoolean,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ManufacturerStatus } from '@prisma/client';
 
@@ -263,15 +265,6 @@ export class ManufacturerFiltersDto {
   @IsString()
   @MaxLength(100)
   country?: string;
-
-  @ApiPropertyOptional({
-    description: 'Filter by state',
-    example: '',
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  state?: string;
 }
 
 export class ManufacturerQueryDto {
@@ -329,4 +322,46 @@ export class ManufacturerQueryDto {
   @IsString()
   @MaxLength(100)
   state?: string;
+
+  @ApiPropertyOptional({
+    description: 'Include brands in response',
+    example: true,
+    type: Boolean,
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return Boolean(value);
+  })
+  @IsBoolean()
+  includeBrands?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Include products in response',
+    example: true,
+    type: Boolean,
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return Boolean(value);
+  })
+  @IsBoolean()
+  includeProducts?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Include user audit information (createdBy, updatedBy, etc.)',
+    example: false,
+    type: Boolean,
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return Boolean(value);
+  })
+  @IsBoolean()
+  includeAuditInfo?: boolean;
 }

@@ -21,6 +21,39 @@ export class UserInfoDto {
   name: string;
 }
 
+export class ManufacturerBrandDto {
+  @ApiProperty({
+    description: 'Brand ID',
+    example: 'clp98765432',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Brand name',
+    example: 'KitKat',
+  })
+  name: string;
+
+  @ApiPropertyOptional({
+    description: 'Brand description',
+    example: 'Premium chocolate wafer bar for break moments',
+  })
+  description?: string;
+
+  @ApiPropertyOptional({
+    description: 'Brand logo URL',
+    example:
+      'https://res.cloudinary.com/jooav/image/upload/v1234567890/brands/kitkat-logo.png',
+  })
+  logo?: string;
+
+  @ApiProperty({
+    description: 'Brand status',
+    example: true,
+  })
+  isActive: boolean;
+}
+
 export class ManufacturerProductDto {
   @ApiProperty({
     description: 'Product ID',
@@ -180,6 +213,12 @@ export class ManufacturerResponseDto {
     example: 150,
   })
   ordersCount: number;
+
+  @ApiPropertyOptional({
+    description: 'Brands under this manufacturer',
+    type: [ManufacturerBrandDto],
+  })
+  brands?: ManufacturerBrandDto[];
 
   @ApiPropertyOptional({
     description: 'Recent products (limited to 10)',

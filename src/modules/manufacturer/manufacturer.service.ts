@@ -122,6 +122,11 @@ export class ManufacturerService {
       country?: string;
       state?: string;
     },
+    includes?: {
+      includeBrands?: boolean;
+      includeProducts?: boolean;
+      includeAuditInfo?: boolean;
+    },
   ): Promise<PaginatedResponse<ManufacturerResponseDto>> {
     const { page = 1, limit = 10 } = paginationDto;
     const skip = (page - 1) * limit;
@@ -151,29 +156,55 @@ export class ManufacturerService {
       where.state = filters.state;
     }
 
+    // Build dynamic include object
+    const includeObject: any = {
+      _count: {
+        select: {
+          products: true,
+          orders: true,
+        },
+      },
+    };
+
+    // Include audit info if requested
+    if (includes?.includeAuditInfo === true) {
+      includeObject.createdByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+      includeObject.updatedByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+      includeObject.deletedByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+    }
+
+    // Include brands if requested
+    if (includes?.includeBrands === true) {
+      includeObject.brands = true;
+    }
+
+    // Include products if requested
+    if (includes?.includeProducts === true) {
+      includeObject.products = {
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          isActive: true,
+          price: true,
+        },
+        take: 10, // Limit to first 10 products
+      };
+    }
+
     const [manufacturers, total] = await Promise.all([
       this.prisma.manufacturer.findMany({
         where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: {
-          createdByUser: {
-            select: { id: true, email: true, firstName: true, lastName: true },
-          },
-          updatedByUser: {
-            select: { id: true, email: true, firstName: true, lastName: true },
-          },
-          deletedByUser: {
-            select: { id: true, email: true, firstName: true, lastName: true },
-          },
-          _count: {
-            select: {
-              products: true,
-              orders: true,
-            },
-          },
-        },
+        include: includeObject,
       }),
       this.prisma.manufacturer.count({ where }),
     ]);
@@ -198,36 +229,59 @@ export class ManufacturerService {
   /**
    * Get manufacturer by ID
    */
-  async findOne(id: string): Promise<ManufacturerResponseDto> {
-    const manufacturer = await this.prisma.manufacturer.findFirst({
-      where: { id, deletedAt: null },
-      include: {
-        createdByUser: {
-          select: { id: true, email: true, firstName: true, lastName: true },
-        },
-        updatedByUser: {
-          select: { id: true, email: true, firstName: true, lastName: true },
-        },
-        deletedByUser: {
-          select: { id: true, email: true, firstName: true, lastName: true },
-        },
-        products: {
-          select: {
-            id: true,
-            name: true,
-            sku: true,
-            isActive: true,
-            price: true,
-          },
-          take: 10, // Limit to first 10 products
-        },
-        _count: {
-          select: {
-            products: true,
-            orders: true,
-          },
+  async findOne(
+    id: string,
+    includes?: {
+      includeBrands?: boolean;
+      includeProducts?: boolean;
+      includeAuditInfo?: boolean;
+    },
+  ): Promise<ManufacturerResponseDto> {
+    // Build dynamic include object
+    const includeObject: any = {
+      _count: {
+        select: {
+          products: true,
+          orders: true,
         },
       },
+    };
+
+    // Include audit info if requested (default to true for backward compatibility)
+    if (includes?.includeAuditInfo !== false) {
+      includeObject.createdByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+      includeObject.updatedByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+      includeObject.deletedByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+    }
+
+    // Include brands if requested (default to true for backward compatibility)
+    if (includes?.includeBrands !== false) {
+      includeObject.brands = true;
+    }
+
+    // Include products if requested (default to true for backward compatibility)
+    if (includes?.includeProducts !== false) {
+      includeObject.products = {
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          isActive: true,
+          price: true,
+        },
+        take: 10, // Limit to first 10 products
+      };
+    }
+
+    const manufacturer = await this.prisma.manufacturer.findFirst({
+      where: { id, deletedAt: null },
+      include: includeObject,
     });
 
     if (!manufacturer) {
@@ -684,6 +738,14 @@ export class ManufacturerService {
         : undefined,
       productsCount: manufacturer._count?.products || 0,
       ordersCount: manufacturer._count?.orders || 0,
+      brands:
+        manufacturer.brands?.map((brand: any) => ({
+          id: brand.id,
+          name: brand.name,
+          description: brand.description,
+          logo: brand.logo,
+          isActive: brand.status === 'ACTIVE',
+        })) || [],
       products: manufacturer.products || [],
     };
   }
