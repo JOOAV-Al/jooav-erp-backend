@@ -248,6 +248,11 @@ export class VariantService {
     // Check if variant exists
     const existingVariant = await this.prisma.variant.findFirst({
       where: { id, deletedAt: null },
+      include: {
+        brand: {
+          select: { id: true, name: true },
+        },
+      },
     });
 
     if (!existingVariant) {
@@ -272,41 +277,96 @@ export class VariantService {
       }
     }
 
-    // If brandId is being updated, check if brand exists
+    // If brandId is being updated, check if brand exists and get brand info
+    let newBrand: { id: string; name: string } | null = null;
     if (brandId && brandId !== existingVariant.brandId) {
-      const brand = await this.prisma.brand.findUnique({
+      newBrand = await this.prisma.brand.findUnique({
         where: { id: brandId, deletedAt: null },
+        select: { id: true, name: true },
       });
 
-      if (!brand) {
+      if (!newBrand) {
         throw new BadRequestException('Brand not found');
       }
     }
 
-    const updatedVariant = await this.prisma.variant.update({
-      where: { id },
-      data: {
-        ...(name && { name }),
-        ...(description !== undefined && { description }),
-        ...(brandId && { brandId }),
-        updatedBy: userId,
-      },
-      include: {
-        brand: {
+    // Check if this update will affect product names/SKUs
+    const willAffectProducts =
+      (name && name !== existingVariant.name) ||
+      (brandId && brandId !== existingVariant.brandId);
+
+    // Use transaction to ensure consistency
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Update the variant first
+      const updatedVariant = await tx.variant.update({
+        where: { id },
+        data: {
+          ...(name && { name }),
+          ...(description !== undefined && { description }),
+          ...(brandId && { brandId }),
+          updatedBy: userId,
+        },
+        include: {
+          brand: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          _count: {
+            select: {
+              products: true,
+            },
+          },
+        },
+      });
+
+      // If changes affect product names/SKUs, update all linked products
+      if (willAffectProducts) {
+        // Get all products linked to this variant
+        const linkedProducts = await tx.product.findMany({
+          where: {
+            variantId: id,
+            deletedAt: null,
+          },
           select: {
             id: true,
-            name: true,
+            packSize: true,
+            packagingType: true,
+            brandId: true,
+            manufacturerId: true,
           },
-        },
-        _count: {
-          select: {
-            products: true,
-          },
-        },
-      },
+        });
+
+        // Update each product's name and SKU
+        for (const product of linkedProducts) {
+          // Determine the effective brand (use new brand if brandId is being updated)
+          const effectiveBrandName = newBrand
+            ? newBrand.name
+            : existingVariant.brand.name;
+          const effectiveVariantName = name || existingVariant.name;
+
+          // Generate new name and SKU
+          const newName = `${effectiveBrandName} ${effectiveVariantName} ${product.packSize} (${product.packagingType})`;
+          const newSku = `${effectiveBrandName.toUpperCase().replace(/[^A-Z0-9]/g, '-')}-${effectiveVariantName.toUpperCase().replace(/[^A-Z0-9]/g, '-')}-${product.packSize.toUpperCase().replace(/[^A-Z0-9]/g, '-')}-${product.packagingType.toUpperCase().replace(/[^A-Z0-9]/g, '-')}`;
+
+          // Update the product
+          await tx.product.update({
+            where: { id: product.id },
+            data: {
+              name: newName,
+              sku: newSku,
+              ...(brandId && { brandId }), // Update brandId if variant's brand changed
+              updatedBy: userId,
+            },
+          });
+        }
+      }
+
+      return updatedVariant;
     });
 
-    return updatedVariant as VariantResponseDto;
+    return result as VariantResponseDto;
   }
 
   @AuditLog({
