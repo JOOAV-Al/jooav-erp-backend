@@ -29,12 +29,13 @@ export class ProductResponseDto {
   })
   sku: string;
 
-  @ApiProperty({
-    description: 'Product barcode',
-    example: '8901058005042',
-    required: false,
-  })
-  barcode: string | null;
+  // Barcode field removed but barcode generation function kept for future use
+  // @ApiProperty({
+  //   description: 'Product barcode',
+  //   example: '8901058005042',
+  //   required: false,
+  // })
+  // barcode: string | null;
 
   @ApiProperty({
     description: 'NAFDAC registration number',
@@ -62,10 +63,10 @@ export class ProductResponseDto {
   manufacturerId: string;
 
   @ApiProperty({
-    description: 'Product variant',
-    example: 'Chicken Curry',
+    description: 'Variant ID',
+    example: 'cm123var-1234-5678-90ab-123456789var',
   })
-  variant: string;
+  variantId: string;
 
   @ApiProperty({
     description: 'Pack size',
@@ -87,11 +88,19 @@ export class ProductResponseDto {
   price: Decimal;
 
   @ApiProperty({
-    description: 'Expiry date for perishable goods',
-    example: '2025-12-31T23:59:59Z',
+    description: 'Discount percentage (0-100)',
+    example: 15.5,
+    type: 'number',
     required: false,
   })
-  expiryDate: Date | null;
+  discount: Decimal | null;
+
+  @ApiProperty({
+    description: 'Primary thumbnail image URL',
+    example: 'https://example.com/indomie-chicken-thumb.jpg',
+    required: false,
+  })
+  thumbnail: string | null;
 
   @ApiProperty({
     description: 'Product images',
@@ -137,6 +146,16 @@ export class ProductResponseDto {
   brand?: {
     id: string;
     name: string;
+  };
+
+  @ApiProperty({
+    description: 'Variant information',
+    required: false,
+  })
+  variant?: {
+    id: string;
+    name: string;
+    description?: string | null;
   };
 
   @ApiProperty({

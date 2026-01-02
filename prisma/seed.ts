@@ -260,6 +260,37 @@ async function main() {
     }),
   ]);
 
+  // Create sample variants
+  const variants = await Promise.all([
+    prisma.variant.create({
+      data: {
+        name: 'Chicken Curry',
+        description: 'Delicious chicken curry flavor',
+        brandId: brands[0].id, // Indomie
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.variant.create({
+      data: {
+        name: 'Classic',
+        description: 'Classic cola flavor',
+        brandId: brands[1].id, // Coca-Cola
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.variant.create({
+      data: {
+        name: 'Milk Powder',
+        description: 'Premium milk powder',
+        brandId: brands[2].id, // Peak
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+  ]);
+
   // Create sample products
   const products = await Promise.all([
     prisma.product.create({
@@ -267,17 +298,18 @@ async function main() {
         name: 'Indomie Chicken Curry 70g (Single Pack)',
         description: 'Delicious instant noodles with chicken curry flavor',
         sku: 'INDOMIE-CHICKEN-CURRY-70G-SINGLE-PACK',
-        barcode: '8901058005042',
         nafdacNumber: 'A1-1234',
         brandId: brands[0].id,
+        variantId: variants[0].id,
         manufacturerId: manufacturers[0].id,
         categoryId:
           categories.find((c) => c.name === 'Instant Noodles')?.id ||
           categories[0].id,
-        variant: 'Chicken Curry',
         packSize: '70g',
         packagingType: 'Single Pack',
         price: 120.0,
+        discount: 5.0,
+        thumbnail: 'indomie-chicken-thumb.jpg',
         images: ['indomie-chicken.jpg'],
         createdBy: users[0].id,
         updatedBy: users[0].id,
@@ -288,16 +320,17 @@ async function main() {
         name: 'Coca Cola Classic 500ml (PET Bottle)',
         description: 'Refreshing cola soft drink',
         sku: 'COCA-COLA-CLASSIC-500ML-PET-BOTTLE',
-        barcode: '5449000000996',
         brandId: brands[1].id,
+        variantId: variants[1].id,
         manufacturerId: manufacturers[1].id,
         categoryId:
           categories.find((c) => c.name === 'Soft Drinks')?.id ||
           categories[0].id,
-        variant: 'Classic',
         packSize: '500ml',
         packagingType: 'PET Bottle',
         price: 200.0,
+        discount: 10.0,
+        thumbnail: 'coca-cola-classic-thumb.jpg',
         images: ['coca-cola-500ml.jpg'],
         createdBy: users[0].id,
         updatedBy: users[0].id,
@@ -305,22 +338,21 @@ async function main() {
     }),
     prisma.product.create({
       data: {
-        name: 'Peak Milk Powder 400g (Tin)',
-        description: 'Premium quality milk powder for families',
-        sku: 'PEAK-MILK-POWDER-400G-TIN',
-        barcode: '8901058123456',
-        nafdacNumber: 'A1-5678',
-        brandId: brands.find((b) => b.name === 'Peak')?.id || brands[0].id,
+        name: 'Peak Milk Powder 400g (Family Pack)',
+        description: 'Premium quality milk powder for the family',
+        sku: 'PEAK-MILK-POWDER-400G-FAMILY-PACK',
+        brandId: brands[2].id,
+        variantId: variants[2].id,
         manufacturerId: manufacturers[0].id,
         categoryId:
           categories.find((c) => c.name === 'Dairy Products')?.id ||
-          categories[0].id,
-        variant: 'Milk Powder',
+          categories[2].id,
         packSize: '400g',
-        packagingType: 'Tin',
+        packagingType: 'Family Pack',
         price: 1500.0,
-        expiryDate: new Date('2025-12-31'),
-        images: ['peak-milk-400g.jpg'],
+        discount: 15.0,
+        thumbnail: 'peak-milk-powder-thumb.jpg',
+        images: ['peak-milk-powder.jpg'],
         createdBy: users[0].id,
         updatedBy: users[0].id,
       },

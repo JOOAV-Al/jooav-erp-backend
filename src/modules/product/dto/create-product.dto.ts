@@ -26,8 +26,9 @@ export class CreateProductDto {
   @MaxLength(500)
   description?: string;
 
-  @ApiProperty({
-    description: 'Product barcode (UPC/EAN) - Auto-generated if not provided',
+  @ApiPropertyOptional({
+    description:
+      'Product barcode (UPC/EAN) - Auto-generated if not provided. Currently not used but kept for future implementation.',
     example: '8901058005042',
     required: false,
   })
@@ -64,15 +65,14 @@ export class CreateProductDto {
   categoryId: string;
 
   @ApiProperty({
-    description: 'Product variant/flavor',
-    example: 'Chicken Curry',
-    maxLength: 100,
+    description: 'Variant ID that this product belongs to',
+    example: 'cmj123456789',
   })
   @IsNotEmpty()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  variant: string;
+  @Matches(/^c[a-z0-9]{24}$/, {
+    message: 'variantId must be a valid ObjectId',
+  })
+  variantId: string;
 
   @ApiProperty({
     description: 'Pack size with unit',
@@ -108,13 +108,24 @@ export class CreateProductDto {
   price: Decimal;
 
   @ApiPropertyOptional({
-    description: 'Expiry date for perishable goods',
-    example: '2025-12-31T23:59:59Z',
-    format: 'date-time',
+    description: 'Discount percentage (0-100)',
+    example: 15.5,
+    type: 'number',
+    format: 'decimal',
+    minimum: 0,
+    maximum: 100,
   })
   @IsOptional()
-  @IsDateString()
-  expiryDate?: string;
+  @Transform(({ value }) => (value ? new Decimal(value) : undefined))
+  discount?: Decimal;
+
+  @ApiPropertyOptional({
+    description: 'Primary thumbnail image URL',
+    example: 'https://example.com/indomie-chicken-thumb.jpg',
+  })
+  @IsOptional()
+  @IsUrl()
+  thumbnail?: string;
 
   @ApiPropertyOptional({
     description: 'Array of product image URLs (first one becomes primary)',
