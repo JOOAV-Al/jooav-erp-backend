@@ -560,10 +560,12 @@ export class ManufacturerService {
       }),
     ]);
 
-    const topCountries = countryStats.map((stat) => ({
-      country: stat.country,
-      count: stat._count.country,
-    }));
+    const topCountries = countryStats
+      .filter((stat) => stat.country !== null)
+      .map((stat) => ({
+        country: stat.country as string,
+        count: stat._count.country,
+      }));
 
     return {
       total: totalManufacturers,
@@ -709,7 +711,6 @@ export class ManufacturerService {
       city: manufacturer.city,
       state: manufacturer.state,
       country: manufacturer.country,
-      postalCode: manufacturer.postalCode,
       registrationNumber: manufacturer.registrationNumber,
       status: manufacturer.status,
       createdAt: manufacturer.createdAt,

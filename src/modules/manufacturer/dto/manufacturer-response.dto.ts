@@ -111,11 +111,11 @@ export class ManufacturerResponseDto {
   })
   email: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Contact phone number',
     example: '+1-555-123-4567',
   })
-  phone: string;
+  phone?: string;
 
   @ApiPropertyOptional({
     description: 'Company website URL',
@@ -123,35 +123,29 @@ export class ManufacturerResponseDto {
   })
   website?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Street address',
     example: '1-7-1 Konan, Minato-ku',
   })
-  address: string;
+  address?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'City',
     example: 'Lagos',
   })
-  city: string;
+  city?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'State or province',
     example: 'Lagos',
   })
-  state: string;
+  state?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Country',
     example: 'Nigeria',
   })
-  country: string;
-
-  @ApiPropertyOptional({
-    description: 'Postal/ZIP code',
-    example: '108-0075',
-  })
-  postalCode?: string;
+  country?: string;
 
   @ApiPropertyOptional({
     description: 'Business registration number',

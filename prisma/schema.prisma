@@ -514,15 +514,14 @@ model Manufacturer {
 
   // Contact Information
   email   String
-  phone   String
+  phone   String?
   website String?
 
   // Address
-  address    String
-  city       String
-  state      String
-  country    String
-  postalCode String?
+  address String?
+  city    String?
+  state   String?
+  country String?
 
   // Business Details
   registrationNumber String? @unique
