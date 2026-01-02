@@ -156,6 +156,11 @@ export class BrandService {
 
   async findAll(
     query: BrandQueryDto,
+    includes?: {
+      includeManufacturer?: boolean;
+      includeProducts?: boolean;
+      includeAuditInfo?: boolean;
+    },
   ): Promise<PaginatedResponse<BrandResponseDto>> {
     const {
       page = 1,
@@ -186,21 +191,67 @@ export class BrandService {
       [sortBy]: sortOrder,
     };
 
+    // Build dynamic include object
+    const includeObject: any = {
+      _count: {
+        select: {
+          products: true,
+        },
+      },
+    };
+
+    // Include manufacturer if requested
+    if (includes?.includeManufacturer === true) {
+      includeObject.manufacturer = {
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          email: true,
+          phone: true,
+          website: true,
+          address: true,
+          city: true,
+          state: true,
+          country: true,
+        },
+      };
+    }
+
+    // Include products if requested
+    if (includes?.includeProducts === true) {
+      includeObject.products = {
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          isActive: true,
+          price: true,
+        },
+        take: 10, // Limit to first 10 products
+      };
+    }
+
+    // Include audit info if requested
+    if (includes?.includeAuditInfo === true) {
+      includeObject.createdByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+      includeObject.updatedByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+      includeObject.deletedByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+    }
+
     const [brands, total] = await Promise.all([
       this.prisma.brand.findMany({
         where,
         orderBy,
         skip,
         take: limit,
-        include: {
-          manufacturer: {
-            select: {
-              id: true,
-              name: true,
-              status: true,
-            },
-          },
-        },
+        include: includeObject,
       }),
       this.prisma.brand.count({ where }),
     ]);
@@ -211,18 +262,71 @@ export class BrandService {
     };
   }
 
-  async findOne(id: string): Promise<BrandResponseDto> {
-    const brand = await this.prisma.brand.findFirst({
-      where: { id, deletedAt: null },
-      include: {
-        manufacturer: {
-          select: {
-            id: true,
-            name: true,
-            status: true,
-          },
+  async findOne(
+    id: string,
+    includes?: {
+      includeManufacturer?: boolean;
+      includeProducts?: boolean;
+      includeAuditInfo?: boolean;
+    },
+  ): Promise<BrandResponseDto> {
+    // Build dynamic include object
+    const includeObject: any = {
+      _count: {
+        select: {
+          products: true,
         },
       },
+    };
+
+    // Include manufacturer if requested (default to true for backward compatibility)
+    if (includes?.includeManufacturer !== false) {
+      includeObject.manufacturer = {
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          email: true,
+          phone: true,
+          website: true,
+          address: true,
+          city: true,
+          state: true,
+          country: true,
+        },
+      };
+    }
+
+    // Include products if requested (default to false)
+    if (includes?.includeProducts === true) {
+      includeObject.products = {
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          isActive: true,
+          price: true,
+        },
+        take: 10, // Limit to first 10 products
+      };
+    }
+
+    // Include audit info if requested (default to false)
+    if (includes?.includeAuditInfo === true) {
+      includeObject.createdByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+      includeObject.updatedByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+      includeObject.deletedByUser = {
+        select: { id: true, email: true, firstName: true, lastName: true },
+      };
+    }
+
+    const brand = await this.prisma.brand.findFirst({
+      where: { id, deletedAt: null },
+      include: includeObject,
     });
 
     if (!brand) {

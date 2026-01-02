@@ -7,7 +7,9 @@ import {
   MaxLength,
   MinLength,
   Matches,
+  IsBoolean,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ManufacturerStatus } from '@prisma/client';
 
@@ -45,7 +47,7 @@ export class CreateManufacturerDto {
     example: '2341-555-123-4567',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MinLength(10)
   @MaxLength(20)
   phone: string;
@@ -64,7 +66,7 @@ export class CreateManufacturerDto {
     example: '1-7-1 Konan, Minato-ku',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(255)
   address: string;
 
@@ -73,7 +75,7 @@ export class CreateManufacturerDto {
     example: 'Lagos',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(100)
   city: string;
 
@@ -82,7 +84,7 @@ export class CreateManufacturerDto {
     example: 'Lagos',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(100)
   state: string;
 
@@ -91,7 +93,7 @@ export class CreateManufacturerDto {
     example: 'NIgeria',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(100)
   country: string;
 
@@ -99,11 +101,6 @@ export class CreateManufacturerDto {
     description: 'Postal/ZIP code',
     example: '108-0075',
   })
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  postalCode?: string;
-
   @ApiPropertyOptional({
     description: 'Business registration number',
     example: 'TK-123456789',
@@ -208,15 +205,6 @@ export class UpdateManufacturerDto {
   country?: string;
 
   @ApiPropertyOptional({
-    description: 'Postal/ZIP code',
-    example: '108-0075',
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  postalCode?: string;
-
-  @ApiPropertyOptional({
     description: 'Business registration number',
     example: 'TK-123456789',
   })
@@ -263,15 +251,6 @@ export class ManufacturerFiltersDto {
   @IsString()
   @MaxLength(100)
   country?: string;
-
-  @ApiPropertyOptional({
-    description: 'Filter by state',
-    example: '',
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  state?: string;
 }
 
 export class ManufacturerQueryDto {
@@ -329,4 +308,46 @@ export class ManufacturerQueryDto {
   @IsString()
   @MaxLength(100)
   state?: string;
+
+  @ApiPropertyOptional({
+    description: 'Include brands in response',
+    example: true,
+    type: Boolean,
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return Boolean(value);
+  })
+  @IsBoolean()
+  includeBrands?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Include products in response',
+    example: true,
+    type: Boolean,
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return Boolean(value);
+  })
+  @IsBoolean()
+  includeProducts?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Include user audit information (createdBy, updatedBy, etc.)',
+    example: false,
+    type: Boolean,
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return Boolean(value);
+  })
+  @IsBoolean()
+  includeAuditInfo?: boolean;
 }

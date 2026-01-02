@@ -21,6 +21,39 @@ export class UserInfoDto {
   name: string;
 }
 
+export class ManufacturerBrandDto {
+  @ApiProperty({
+    description: 'Brand ID',
+    example: 'clp98765432',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Brand name',
+    example: 'KitKat',
+  })
+  name: string;
+
+  @ApiPropertyOptional({
+    description: 'Brand description',
+    example: 'Premium chocolate wafer bar for break moments',
+  })
+  description?: string;
+
+  @ApiPropertyOptional({
+    description: 'Brand logo URL',
+    example:
+      'https://res.cloudinary.com/jooav/image/upload/v1234567890/brands/kitkat-logo.png',
+  })
+  logo?: string;
+
+  @ApiProperty({
+    description: 'Brand status',
+    example: true,
+  })
+  isActive: boolean;
+}
+
 export class ManufacturerProductDto {
   @ApiProperty({
     description: 'Product ID',
@@ -78,11 +111,11 @@ export class ManufacturerResponseDto {
   })
   email: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Contact phone number',
     example: '+1-555-123-4567',
   })
-  phone: string;
+  phone?: string;
 
   @ApiPropertyOptional({
     description: 'Company website URL',
@@ -90,35 +123,29 @@ export class ManufacturerResponseDto {
   })
   website?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Street address',
     example: '1-7-1 Konan, Minato-ku',
   })
-  address: string;
+  address?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'City',
     example: 'Lagos',
   })
-  city: string;
+  city?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'State or province',
     example: 'Lagos',
   })
-  state: string;
+  state?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Country',
     example: 'Nigeria',
   })
-  country: string;
-
-  @ApiPropertyOptional({
-    description: 'Postal/ZIP code',
-    example: '108-0075',
-  })
-  postalCode?: string;
+  country?: string;
 
   @ApiPropertyOptional({
     description: 'Business registration number',
@@ -180,6 +207,12 @@ export class ManufacturerResponseDto {
     example: 150,
   })
   ordersCount: number;
+
+  @ApiPropertyOptional({
+    description: 'Brands under this manufacturer',
+    type: [ManufacturerBrandDto],
+  })
+  brands?: ManufacturerBrandDto[];
 
   @ApiPropertyOptional({
     description: 'Recent products (limited to 10)',

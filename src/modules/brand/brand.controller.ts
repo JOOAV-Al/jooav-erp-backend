@@ -129,7 +129,13 @@ export class BrandController {
   async findAll(
     @Query() query: BrandQueryDto,
   ): Promise<PaginatedResponse<BrandResponseDto>> {
-    return this.brandService.findAll(query);
+    const includesDto = {
+      includeManufacturer: query.includeManufacturer,
+      includeProducts: query.includeProducts,
+      includeAuditInfo: query.includeAuditInfo,
+    };
+
+    return this.brandService.findAll(query, includesDto);
   }
 
   @Get('stats')
@@ -191,8 +197,19 @@ export class BrandController {
     description: 'Brand retrieved successfully',
     type: BrandResponseDto,
   })
-  async findOne(@Param('id') id: string): Promise<BrandResponseDto> {
-    return this.brandService.findOne(id);
+  async findOne(
+    @Param('id') id: string,
+    @Query('includeManufacturer') includeManufacturer?: boolean,
+    @Query('includeProducts') includeProducts?: boolean,
+    @Query('includeAuditInfo') includeAuditInfo?: boolean,
+  ): Promise<BrandResponseDto> {
+    const includesDto = {
+      includeManufacturer,
+      includeProducts,
+      includeAuditInfo,
+    };
+
+    return this.brandService.findOne(id, includesDto);
   }
 
   @Patch(':id')

@@ -29,32 +29,42 @@ export class ProductService {
    */
   private async generateProductIdentifiers(
     brandId: string,
-    variant: string,
+    variantId: string,
     packSize: string,
     packagingType: string,
   ): Promise<{ name: string; sku: string; barcode: string }> {
-    // Get brand name
-    const brand = await this.prisma.brand.findUnique({
-      where: { id: brandId },
-      select: { name: true },
-    });
+    // Get brand and variant names
+    const [brand, variant] = await Promise.all([
+      this.prisma.brand.findUnique({
+        where: { id: brandId },
+        select: { name: true },
+      }),
+      this.prisma.variant.findUnique({
+        where: { id: variantId },
+        select: { name: true },
+      }),
+    ]);
 
     if (!brand) {
       throw new BadRequestException('Brand not found');
     }
 
+    if (!variant) {
+      throw new BadRequestException('Variant not found');
+    }
+
     // Generate name: "Brand Variant PackSize (PackType)"
-    const name = `${brand.name} ${variant} ${packSize} (${packagingType})`;
+    const name = `${brand.name} ${variant.name} ${packSize} (${packagingType})`;
 
     // Generate SKU: "BRAND-VARIANT-PACKSIZE-PACKTYPE"
     const sku = StringUtils.generateSlug(
-      `${brand.name}-${variant}-${packSize}-${packagingType}`,
+      `${brand.name}-${variant.name}-${packSize}-${packagingType}`,
     ).toUpperCase();
 
     // Generate EAN-13 barcode
     const barcode = BarcodeGenerator.generateEAN13(
       brand.name,
-      variant,
+      variant.name,
       packSize,
       packagingType,
     );
@@ -87,6 +97,29 @@ export class ProductService {
     return { manufacturerId: brand.manufacturerId };
   }
 
+  /**
+   * Validate that variant exists and belongs to the specified brand
+   */
+  private async validateVariant(
+    variantId: string,
+    brandId: string,
+  ): Promise<void> {
+    const variant = await this.prisma.variant.findUnique({
+      where: { id: variantId },
+      select: { id: true, brandId: true },
+    });
+
+    if (!variant) {
+      throw new BadRequestException('Variant not found');
+    }
+
+    if (variant.brandId !== brandId) {
+      throw new BadRequestException(
+        'Variant does not belong to the specified brand',
+      );
+    }
+  }
+
   async create(
     createProductDto: CreateProductDto,
     userId: string,
@@ -94,7 +127,7 @@ export class ProductService {
     const {
       brandId,
       categoryId,
-      variant,
+      variantId,
       packSize,
       packagingType,
       barcode: providedBarcode,
@@ -105,6 +138,9 @@ export class ProductService {
     const validation = await this.validateReferences(brandId, categoryId);
     const manufacturerId = validation.manufacturerId;
 
+    // Validate that variant exists and belongs to the specified brand
+    await this.validateVariant(variantId, brandId);
+
     // Generate name, SKU, and barcode (if not provided)
     const {
       name,
@@ -112,15 +148,15 @@ export class ProductService {
       barcode: generatedBarcode,
     } = await this.generateProductIdentifiers(
       brandId,
-      variant,
+      variantId,
       packSize,
       packagingType,
     );
 
-    // Use provided barcode or generated one
+    // Use provided barcode or generated one (but barcode is currently not used in schema)
     const finalBarcode = providedBarcode || generatedBarcode;
 
-    // Validate barcode if provided manually
+    // Validate barcode if provided manually (for future use)
     if (providedBarcode && !BarcodeGenerator.validateEAN13(providedBarcode)) {
       // If it's not a valid EAN-13, check if it might be UPC-A or other format
       if (!/^\d{12,13}$/.test(providedBarcode)) {
@@ -139,27 +175,16 @@ export class ProductService {
       throw new ConflictException(`Product with SKU "${sku}" already exists`);
     }
 
-    // Check if barcode already exists
-    const existingBarcode = await this.prisma.product.findUnique({
-      where: { barcode: finalBarcode },
-    });
-
-    if (existingBarcode) {
-      throw new ConflictException(
-        `Product with barcode "${finalBarcode}" already exists`,
-      );
-    }
-
     try {
       const product = await this.prisma.product.create({
         data: {
           name,
           sku,
-          barcode: finalBarcode,
+          // barcode field removed from schema but generation kept for future
           brandId,
           categoryId,
           manufacturerId,
-          variant,
+          variantId,
           packSize,
           packagingType,
           ...rest,
@@ -170,6 +195,9 @@ export class ProductService {
         include: {
           brand: {
             select: { id: true, name: true },
+          },
+          variant: {
+            select: { id: true, name: true, description: true },
           },
           category: {
             select: {
@@ -238,13 +266,17 @@ export class ProductService {
       ...(isActive !== undefined && { isActive }),
       ...(brandId && { brandId }),
       ...(categoryId && { categoryId }),
-      ...(variant && { variant: { contains: variant, mode: 'insensitive' } }),
+      ...(variant && {
+        variant: {
+          name: { contains: variant, mode: 'insensitive' as const },
+        },
+      }),
       ...(search && {
         OR: [
           { name: { contains: search, mode: 'insensitive' } },
           { sku: { contains: search, mode: 'insensitive' } },
           { description: { contains: search, mode: 'insensitive' } },
-          { variant: { contains: search, mode: 'insensitive' } },
+          { variant: { name: { contains: search, mode: 'insensitive' } } },
         ],
       }),
     };
@@ -330,25 +362,17 @@ export class ProductService {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    const {
-      brandId,
-      categoryId,
-      variant,
-      packSize,
-      packagingType,
-      barcode: providedBarcode,
-      ...rest
-    } = updateProductDto;
+    const { brandId, categoryId, variantId, packSize, packagingType, ...rest } =
+      updateProductDto;
 
     let name: string | undefined;
     let sku: string | undefined;
-    let barcode: string | undefined;
     let manufacturerId: string | undefined;
 
-    // If any identifier fields are being updated, regenerate name, SKU, and barcode
-    if (brandId || variant || packSize || packagingType) {
+    // If any identifier fields are being updated, regenerate name, SKU
+    if (brandId || variantId || packSize || packagingType) {
       const finalBrandId = brandId || existingProduct.brandId;
-      const finalVariant = variant || existingProduct.variant;
+      const finalVariantId = variantId || existingProduct.variantId;
       const finalPackSize = packSize || existingProduct.packSize;
       const finalPackagingType = packagingType || existingProduct.packagingType;
 
@@ -363,16 +387,20 @@ export class ProductService {
         }
       }
 
+      // Validate variant if changed
+      if (variantId) {
+        await this.validateVariant(variantId, finalBrandId);
+      }
+
       const identifiers = await this.generateProductIdentifiers(
         finalBrandId,
-        finalVariant,
+        finalVariantId,
         finalPackSize,
         finalPackagingType,
       );
 
       name = identifiers.name;
       sku = identifiers.sku;
-      barcode = identifiers.barcode;
 
       // Check if new SKU conflicts with existing products (excluding current)
       if (sku !== existingProduct.sku) {
@@ -388,51 +416,28 @@ export class ProductService {
       }
     }
 
-    // Handle manually provided barcode
-    if (providedBarcode && providedBarcode !== barcode) {
-      // Validate the provided barcode
-      if (!BarcodeGenerator.validateEAN13(providedBarcode)) {
-        if (!/^\d{12,13}$/.test(providedBarcode)) {
-          throw new BadRequestException(
-            'Invalid barcode format. Must be 12-13 digits.',
-          );
-        }
-      }
-
-      // Check if provided barcode conflicts with existing products (excluding current)
-      const existingBarcodeProduct = await this.prisma.product.findUnique({
-        where: { barcode: providedBarcode },
-      });
-
-      if (existingBarcodeProduct && existingBarcodeProduct.id !== id) {
-        throw new ConflictException(
-          `Product with barcode "${providedBarcode}" already exists`,
-        );
-      }
-
-      barcode = providedBarcode;
-    }
-
     try {
       const product = await this.prisma.product.update({
         where: { id },
         data: {
           ...(name && { name }),
           ...(sku && { sku }),
-          ...(barcode && { barcode }),
-          ...updateProductDto,
+          ...(manufacturerId && { manufacturerId }),
+          ...rest,
           updatedBy: userId,
         },
         include: {
           brand: {
             select: { id: true, name: true },
           },
+          variant: {
+            select: { id: true, name: true, description: true },
+          },
           category: {
             select: {
               id: true,
               name: true,
               slug: true,
-
               parent: {
                 select: { id: true, name: true, slug: true },
               },
@@ -487,7 +492,6 @@ export class ProductService {
       data: {
         deletedAt: new Date(),
         deletedBy: userId,
-        isActive: false, // Also deactivate
       },
     });
 
@@ -517,12 +521,14 @@ export class ProductService {
         brand: {
           select: { id: true, name: true },
         },
+        variant: {
+          select: { id: true, name: true, description: true },
+        },
         category: {
           select: {
             id: true,
             name: true,
             slug: true,
-
             parent: {
               select: { id: true, name: true, slug: true },
             },
@@ -562,12 +568,14 @@ export class ProductService {
         brand: {
           select: { id: true, name: true },
         },
+        variant: {
+          select: { id: true, name: true, description: true },
+        },
         category: {
           select: {
             id: true,
             name: true,
             slug: true,
-
             parent: {
               select: { id: true, name: true, slug: true },
             },

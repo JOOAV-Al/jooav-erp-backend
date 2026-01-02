@@ -1,5 +1,70 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BrandStatus } from '@prisma/client';
+
+export class BrandManufacturerDto {
+  @ApiProperty({ example: 'c9f7cc4d-9e52-4a3b-9c6d-1f2a3b4c5d6e' })
+  id: string;
+
+  @ApiProperty({ example: 'Nestle Nigeria Plc' })
+  name: string;
+
+  @ApiProperty({ example: 'ACTIVE' })
+  status: string;
+
+  @ApiPropertyOptional({ example: 'info@nestle.com.ng' })
+  email?: string;
+
+  @ApiPropertyOptional({ example: '+234-1-280-0000' })
+  phone?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://www.nestle-cwa.com/en/nestle-nigeria',
+  })
+  website?: string;
+
+  @ApiPropertyOptional({ example: '22-24 Industrial Avenue, Ilupeju' })
+  address?: string;
+
+  @ApiPropertyOptional({ example: 'Lagos' })
+  city?: string;
+
+  @ApiPropertyOptional({ example: 'Lagos' })
+  state?: string;
+
+  @ApiPropertyOptional({ example: 'Nigeria' })
+  country?: string;
+}
+
+export class BrandProductDto {
+  @ApiProperty({ example: 'p8e6cc4d-9e52-4a3b-9c6d-1f2a3b4c5d6e' })
+  id: string;
+
+  @ApiProperty({ example: 'KitKat Bar 45g' })
+  name: string;
+
+  @ApiProperty({ example: 'KITKAT-BAR-45G' })
+  sku: string;
+
+  @ApiProperty({ example: true })
+  isActive: boolean;
+
+  @ApiProperty({ example: '150.00' })
+  price: string;
+}
+
+export class BrandUserDto {
+  @ApiProperty({ example: 'u8e6cc4d-9e52-4a3b-9c6d-1f2a3b4c5d6e' })
+  id: string;
+
+  @ApiProperty({ example: 'admin@jooav.com' })
+  email: string;
+
+  @ApiProperty({ example: 'John' })
+  firstName: string;
+
+  @ApiProperty({ example: 'Doe' })
+  lastName: string;
+}
 
 export class BrandResponseDto {
   @ApiProperty({ example: 'b8e6cc4d-9e52-4a3b-9c6d-1f2a3b4c5d6e' })
@@ -42,11 +107,41 @@ export class BrandResponseDto {
   })
   updatedBy: string | null;
 
-  manufacturer?: {
-    id: string;
-    name: string; // e.g., "Nestlé Nigeria PLC"
-    status: string;
-  };
+  @ApiPropertyOptional({
+    description: 'Manufacturer information',
+    type: BrandManufacturerDto,
+  })
+  manufacturer?: BrandManufacturerDto;
+
+  @ApiPropertyOptional({
+    description: 'Products under this brand',
+    type: [BrandProductDto],
+  })
+  products?: BrandProductDto[];
+
+  @ApiPropertyOptional({
+    description: 'User who created this brand',
+    type: BrandUserDto,
+  })
+  createdByUser?: BrandUserDto;
+
+  @ApiPropertyOptional({
+    description: 'User who last updated this brand',
+    type: BrandUserDto,
+  })
+  updatedByUser?: BrandUserDto;
+
+  @ApiPropertyOptional({
+    description: 'User who deleted this brand',
+    type: BrandUserDto,
+  })
+  deletedByUser?: BrandUserDto;
+
+  @ApiPropertyOptional({
+    description: 'Count of products under this brand',
+    example: 15,
+  })
+  productsCount?: number;
 }
 
 export class BrandStatsDto {

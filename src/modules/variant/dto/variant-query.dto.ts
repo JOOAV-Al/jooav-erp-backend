@@ -1,50 +1,76 @@
 import {
-  IsOptional,
   IsString,
+  IsOptional,
   IsEnum,
-  IsUUID,
-  Matches,
+  MaxLength,
   IsBoolean,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { BrandStatus } from '@prisma/client';
-import { PaginationDto } from '../../../common/dto/pagination.dto';
 
-export class BrandQueryDto extends PaginationDto {
+export class VariantQueryDto {
   @ApiPropertyOptional({
-    enum: BrandStatus,
-    description: 'Filter by brand status',
-  })
-  @IsOptional()
-  @IsEnum(BrandStatus)
-  status?: BrandStatus;
-
-  @ApiPropertyOptional({ description: 'Filter by manufacturer ID' })
-  @IsOptional()
-  @Matches(/^c[a-z0-9]{24}$/, {
-    message: 'manufacturerId must be a valid ObjectId',
-  })
-  manufacturerId?: string;
-
-  @ApiPropertyOptional({
-    description: 'Sort by field',
-    enum: ['name', 'createdAt', 'updatedAt'],
+    description: 'Page number (default: 1)',
+    example: 1,
+    minimum: 1,
+    required: false,
   })
   @IsOptional()
   @IsString()
+  page?: string;
+
+  @ApiPropertyOptional({
+    description: 'Items per page (default: 10, max: 100)',
+    example: 10,
+    minimum: 1,
+    maximum: 100,
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  limit?: string;
+
+  @ApiPropertyOptional({
+    description: 'Search term for variant name or description',
+    example: '',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  search?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by brand ID',
+    example: 'cmj123456789',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  brandId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Sort field',
+    example: 'name',
+    enum: ['name', 'createdAt', 'updatedAt'],
+    required: false,
+  })
+  @IsOptional()
+  @IsEnum(['name', 'createdAt', 'updatedAt'])
   sortBy?: 'name' | 'createdAt' | 'updatedAt';
 
   @ApiPropertyOptional({
     description: 'Sort order',
+    example: 'asc',
     enum: ['asc', 'desc'],
+    required: false,
   })
   @IsOptional()
   @IsString()
   sortOrder?: 'asc' | 'desc';
 
   @ApiPropertyOptional({
-    description: 'Include manufacturer in response',
+    description: 'Include brand in response',
     example: true,
     type: Boolean,
   })
@@ -55,11 +81,12 @@ export class BrandQueryDto extends PaginationDto {
     return Boolean(value);
   })
   @IsBoolean()
-  includeManufacturer?: boolean;
+  includeBrand?: boolean;
 
   @ApiPropertyOptional({
-    description: 'Include products in response',
+    description: 'Include products count in response',
     example: true,
+    required: false,
     type: Boolean,
   })
   @IsOptional()
@@ -69,12 +96,13 @@ export class BrandQueryDto extends PaginationDto {
     return Boolean(value);
   })
   @IsBoolean()
-  includeProducts?: boolean;
+  includeProductsCount?: boolean;
 
   @ApiPropertyOptional({
     description: 'Include audit information (createdBy, updatedBy, etc.)',
     example: false,
     type: Boolean,
+    required: false,
   })
   @IsOptional()
   @Transform(({ value }) => {
