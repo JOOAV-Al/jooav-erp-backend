@@ -54,7 +54,6 @@ import { UserRole } from '../../common/enums';
 @ApiTags('Brands')
 @Controller('brands')
 @UseGuards(UnifiedAuthGuard, RolesGuard)
-@ApiBearerAuth('access-token')
 @ApiBearerAuth('admin-access-token')
 export class BrandController {
   constructor(private readonly brandService: BrandService) {}

@@ -39,14 +39,13 @@ import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 
 @ApiTags('Products')
 @Controller('api/v1/products')
-@UseGuards(UnifiedAuthGuard, RolesGuard)
-@Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
-@ApiBearerAuth('access-token')
-@ApiBearerAuth('admin-access-token')
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
   @Post()
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiBearerAuth('admin-access-token')
   @ApiOperation({
     summary: 'Create a new product',
     description: 'Create a new FMCG product with auto-generated SKU and name',
@@ -74,9 +73,9 @@ export class ProductController {
 
   @Get()
   @ApiOperation({
-    summary: 'Get all products',
+    summary: 'Get all products (Accessible to everyone)',
     description:
-      'Retrieve paginated list of products with filtering and search',
+      'Retrieve paginated list of products with filtering and search (Accessible to everyone)',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -91,8 +90,6 @@ export class ProductController {
   @ApiQuery({ name: 'variant', required: false, example: 'Chicken' })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
   @ApiQuery({ name: 'includeRelations', required: false, type: Boolean })
-  @ApiUnauthorizedResponse({ description: 'Authentication required' })
-  @ApiForbiddenResponse({ description: 'Admin access required' })
   async findAll(
     @Query() query: ProductQueryDto,
   ): Promise<PaginatedResponse<ProductResponseDto>> {
@@ -101,8 +98,9 @@ export class ProductController {
 
   @Get(':id')
   @ApiOperation({
-    summary: 'Get product by ID',
-    description: 'Retrieve a specific product with all related information',
+    summary: 'Get product by ID (Accessible to everyone)',
+    description:
+      'Retrieve a specific product with all related information (Accessible to everyone)',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -110,13 +108,14 @@ export class ProductController {
     type: ProductResponseDto,
   })
   @ApiNotFoundResponse({ description: 'Product not found' })
-  @ApiUnauthorizedResponse({ description: 'Authentication required' })
-  @ApiForbiddenResponse({ description: 'Admin access required' })
   async findOne(@Param('id') id: string): Promise<ProductResponseDto> {
     return await this.productService.findOne(id);
   }
 
   @Patch(':id')
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiBearerAuth('admin-access-token')
   @ApiOperation({
     summary: 'Update product',
     description:
@@ -146,6 +145,9 @@ export class ProductController {
   }
 
   @Delete(':id')
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiBearerAuth('admin-access-token')
   @ApiOperation({
     summary: 'Delete product',
     description:
@@ -167,6 +169,9 @@ export class ProductController {
   }
 
   @Post(':id/activate')
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiBearerAuth('admin-access-token')
   @ApiOperation({
     summary: 'Activate product',
     description: 'Activate a deactivated product',
@@ -188,6 +193,9 @@ export class ProductController {
   }
 
   @Post(':id/deactivate')
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiBearerAuth('admin-access-token')
   @ApiOperation({
     summary: 'Deactivate product',
     description: 'Deactivate an active product',
