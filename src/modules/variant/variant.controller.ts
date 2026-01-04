@@ -39,7 +39,6 @@ import { UserRole } from '../../common/enums';
 @ApiTags('Variants')
 @Controller('variants')
 @UseGuards(UnifiedAuthGuard, RolesGuard)
-@ApiBearerAuth('access-token')
 @ApiBearerAuth('admin-access-token')
 export class VariantController {
   constructor(private readonly variantService: VariantService) {}

@@ -25,10 +25,7 @@ import { UserRole, UserStatus } from '@prisma/client';
 import { UsersService } from './users.service';
 import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import {
-  CurrentUser,
-  CurrentUserId,
-} from '../../common/decorators/current-user.decorator';
+import { CurrentUserId } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AuditLog } from '../../common/decorators/audit-log.decorator';
 import { PaginationDto, PaginatedResponse } from '../../common/dto';

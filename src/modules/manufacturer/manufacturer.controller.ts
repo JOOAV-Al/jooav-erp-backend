@@ -47,7 +47,6 @@ import {
 @ApiTags('Manufacturers')
 @Controller('manufacturers')
 @UseGuards(UnifiedAuthGuard, RolesGuard)
-@ApiBearerAuth('access-token')
 @ApiBearerAuth('admin-access-token')
 export class ManufacturerController {
   constructor(private readonly manufacturerService: ManufacturerService) {}

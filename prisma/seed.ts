@@ -87,7 +87,7 @@ async function main() {
     update: {},
     create: {
       email: 'subadmin@jooav.com',
-      firstName: 'Regional',
+      firstName: 'Procurement',
       lastName: 'Officer',
       password: await hashPassword('password123'), // Argon2 hashed
       role: UserRole.SUB_ADMIN,
