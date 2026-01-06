@@ -9,6 +9,7 @@ import {
   Query,
   HttpStatus,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -34,6 +35,8 @@ import { CurrentUserId } from '../../common/decorators/current-user.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AuditLog } from '../../common/decorators/audit-log.decorator';
+import { Cache } from '../../common/decorators/cache.decorator';
+import { CacheInterceptor } from '../../common/interceptors/cache.interceptor';
 import { UserRole } from '../../common/enums/';
 import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 
@@ -72,6 +75,12 @@ export class ProductController {
   }
 
   @Get()
+  @UseInterceptors(CacheInterceptor)
+  @Cache({
+    key: 'products',
+    ttl: 600, // 10 minutes - products change more frequently than categories
+    includeParams: true,
+  })
   @ApiOperation({
     summary: 'Get all products (Accessible to everyone)',
     description:
@@ -84,10 +93,10 @@ export class ProductController {
   })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 10 })
-  @ApiQuery({ name: 'search', required: false, example: 'Indomie' })
+  @ApiQuery({ name: 'search', required: false, example: '' })
   @ApiQuery({ name: 'brandId', required: false })
   @ApiQuery({ name: 'categoryId', required: false })
-  @ApiQuery({ name: 'variant', required: false, example: 'Chicken' })
+  @ApiQuery({ name: 'variant', required: false, example: '' })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
   @ApiQuery({ name: 'includeRelations', required: false, type: Boolean })
   async findAll(
@@ -97,6 +106,12 @@ export class ProductController {
   }
 
   @Get(':id')
+  @UseInterceptors(CacheInterceptor)
+  @Cache({
+    key: 'product',
+    ttl: 900, // 15 minutes - individual products don't change as frequently
+    includeParams: true,
+  })
   @ApiOperation({
     summary: 'Get product by ID (Accessible to everyone)',
     description:
