@@ -34,6 +34,7 @@ import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor
 // Services
 import { LoggerService } from './common/utils/logger.service';
 import { AuditService } from './modules/audit/audit.service';
+import { StartupValidationService } from './config/startup-validation.service';
 import { CacheModule } from './modules/cache/cache.module';
 import { EmailModule } from './modules/email/email.module';
 
@@ -118,6 +119,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
     AppService,
     PrismaService,
     AuditService,
+    StartupValidationService,
 
     // Global pipes
     {

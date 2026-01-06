@@ -8,6 +8,7 @@ import { Prisma, BrandStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CloudinaryService } from '../storage/cloudinary.service';
+import { CacheInvalidationService } from '../cache/cache-invalidation.service';
 import { StringUtils } from '../../common/utils/helpers.utils';
 import {
   CreateBrandDto,
@@ -27,6 +28,7 @@ export class BrandService {
     private prisma: PrismaService,
     private cloudinaryService: CloudinaryService,
     private auditService: AuditService,
+    private cacheInvalidationService: CacheInvalidationService,
   ) {}
 
   /**
@@ -140,6 +142,9 @@ export class BrandService {
           manufacturerId: brand.manufacturerId,
         },
       });
+
+      // Invalidate brand-related caches
+      await this.cacheInvalidationService.invalidateBrand(brand.id);
 
       return brand;
     } catch (error) {
@@ -483,6 +488,9 @@ export class BrandService {
         },
       });
 
+      // Invalidate brand-related caches
+      await this.cacheInvalidationService.invalidateBrand(id);
+
       return brand;
     } catch (error) {
       // Handle Prisma unique constraint error
@@ -556,6 +564,9 @@ export class BrandService {
       userId,
       metadata: { brandName: existingBrand.name },
     });
+
+    // Invalidate brand-related caches
+    await this.cacheInvalidationService.invalidateBrand(id);
 
     return { message: 'Brand deleted successfully' };
   }
