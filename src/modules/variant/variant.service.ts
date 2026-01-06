@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CacheInvalidationService } from '../cache/cache-invalidation.service';
 import { Prisma } from '@prisma/client';
 import {
   CreateVariantDto,
@@ -18,7 +19,10 @@ import { AuditLog } from '../../common/decorators/audit-log.decorator';
 
 @Injectable()
 export class VariantService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cacheInvalidationService: CacheInvalidationService,
+  ) {}
 
   @AuditLog({
     action: 'CREATE',
@@ -76,6 +80,9 @@ export class VariantService {
         },
       },
     });
+
+    // Invalidate variant-related caches
+    await this.cacheInvalidationService.invalidateVariant(variant.id);
 
     return variant as VariantResponseDto;
   }
@@ -333,17 +340,52 @@ export class VariantService {
             id: true,
             packSize: true,
             packagingType: true,
+            brand: { select: { name: true } },
             brandId: true,
             manufacturerId: true,
           },
         });
+
+        // Check for products that would have identical specifications after update
+        const effectiveBrandName = newBrand
+          ? newBrand.name
+          : existingVariant.brand.name;
+        const effectiveVariantName = name || existingVariant.name;
+
+        const specMap = new Map<string, string[]>();
+        for (const product of linkedProducts) {
+          const specKey =
+            `${effectiveBrandName}-${effectiveVariantName}-${product.packSize}-${product.packagingType}`.toLowerCase();
+          if (!specMap.has(specKey)) {
+            specMap.set(specKey, []);
+          }
+          specMap.get(specKey)!.push(product.id);
+        }
+
+        // Find duplicates
+        const duplicateSpecs = Array.from(specMap.entries()).filter(
+          ([_, productIds]) => productIds.length > 1,
+        );
+
+        if (duplicateSpecs.length > 0) {
+          const duplicateInfo = duplicateSpecs
+            .map(
+              ([spec, productIds]) =>
+                `${productIds.length} products with specs: ${spec} (IDs: ${productIds.join(', ')})`,
+            )
+            .join('\n');
+
+          throw new ConflictException(
+            `Cannot update variant because it would create products with identical specifications:\n${duplicateInfo}\n\nPlease ensure all products have unique combinations of brand, variant, pack size, and packaging type.`,
+          );
+        }
 
         // Update each product's name and SKU
         for (const product of linkedProducts) {
           // Determine the effective brand (use new brand if brandId is being updated)
           const effectiveBrandName = newBrand
             ? newBrand.name
-            : existingVariant.brand.name;
+            : product.brand.name;
           const effectiveVariantName = name || existingVariant.name;
 
           // Generate new name and SKU
@@ -365,6 +407,12 @@ export class VariantService {
 
       return updatedVariant;
     });
+
+    // Invalidate variant and product caches (since products may have been updated)
+    await this.cacheInvalidationService.invalidateVariant(id);
+    if (willAffectProducts) {
+      await this.cacheInvalidationService.invalidateProducts();
+    }
 
     return result as VariantResponseDto;
   }
@@ -405,6 +453,9 @@ export class VariantService {
         deletedAt: new Date(),
       },
     });
+
+    // Invalidate variant-related caches
+    await this.cacheInvalidationService.invalidateVariant(id);
 
     return { message: 'Variant deleted successfully' };
   }

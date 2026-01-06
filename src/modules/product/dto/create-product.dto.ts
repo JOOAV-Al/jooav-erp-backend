@@ -26,12 +26,6 @@ export class CreateProductDto {
   @MaxLength(500)
   description?: string;
 
-  @ApiPropertyOptional({
-    description:
-      'Product barcode (UPC/EAN) - Auto-generated if not provided. Currently not used but kept for future implementation.',
-    example: '8901058005042',
-    required: false,
-  })
   @IsOptional()
   @IsString()
   barcode?: string;

@@ -8,6 +8,7 @@ import {
   Delete,
   Query,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -31,6 +32,8 @@ import { CurrentUserId } from '../../common/decorators/current-user.decorator';
 import { AuditLog } from '../../common/decorators/audit-log.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Cache } from '../../common/decorators/cache.decorator';
+import { CacheInterceptor } from '../../common/interceptors/cache.interceptor';
 import { UserRole } from '../../common/enums';
 
 @ApiTags('Categories')
@@ -59,6 +62,12 @@ export class CategoryController {
   }
 
   @Get()
+  @UseInterceptors(CacheInterceptor)
+  @Cache({
+    key: 'categories',
+    ttl: 900, // 15 minutes - categories don't change frequently
+    includeParams: true,
+  })
   @ApiOperation({
     summary: 'Get all FMCG categories (Accessible to everyone)',
   })
@@ -102,6 +111,11 @@ export class CategoryController {
   }
 
   @Get('tree')
+  @UseInterceptors(CacheInterceptor)
+  @Cache({
+    key: 'categories_tree',
+    ttl: 1800, // 30 minutes - tree structure changes even less frequently
+  })
   @ApiOperation({
     summary:
       'Get FMCG category tree (major categories like Food & Beverages, Personal Care with their subcategories) - (Accessible to everyone)',
@@ -116,6 +130,12 @@ export class CategoryController {
   }
 
   @Get('subcategories')
+  @UseInterceptors(CacheInterceptor)
+  @Cache({
+    key: 'categories_subcategories',
+    ttl: 900, // 15 minutes
+    includeParams: true,
+  })
   @ApiOperation({
     summary:
       'Get all subcategories (categories with parent) - (Accessible to everyone)',

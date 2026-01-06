@@ -58,4 +58,19 @@ export class HealthController {
       timestamp: new Date().toISOString(),
     };
   }
+
+  @Get('cache')
+  @ApiOperation({ summary: 'Check Redis cache connection and status' })
+  @ApiResponse({ status: 200, description: 'Cache status information' })
+  async cacheStatus() {
+    const connectionInfo = await this.cacheService.getConnectionInfo();
+    const connectionStatus = this.cacheService.getConnectionStatus();
+
+    return {
+      status: connectionStatus.connected ? 'healthy' : 'unhealthy',
+      timestamp: new Date().toISOString(),
+      connection: connectionStatus,
+      details: connectionInfo,
+    };
+  }
 }
