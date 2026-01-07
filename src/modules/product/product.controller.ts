@@ -24,12 +24,17 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { ProductService } from './product.service';
+import { BulkProductCreationService } from './services/bulk-product-creation.service';
 import {
   CreateProductDto,
   UpdateProductDto,
   ProductQueryDto,
   ProductResponseDto,
 } from './dto';
+import {
+  BulkProductCreationDto,
+  BulkProductCreationResponse,
+} from './dto/bulk-product-creation.dto';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
 import { CurrentUserId } from '../../common/decorators/current-user.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -41,9 +46,12 @@ import { UserRole } from '../../common/enums/';
 import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 
 @ApiTags('Products')
-@Controller('api/v1/products')
+@Controller('products')
 export class ProductController {
-  constructor(private readonly productService: ProductService) {}
+  constructor(
+    private readonly productService: ProductService,
+    private readonly bulkProductCreationService: BulkProductCreationService,
+  ) {}
 
   @Post()
   @UseGuards(UnifiedAuthGuard, RolesGuard)
@@ -72,6 +80,42 @@ export class ProductController {
     @CurrentUserId() userId: string,
   ): Promise<ProductResponseDto> {
     return await this.productService.create(createProductDto, userId);
+  }
+
+  @Post('bulk')
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiBearerAuth('admin-access-token')
+  @ApiOperation({
+    summary: 'Bulk create products from CSV data',
+    description:
+      'Create multiple products from CSV data with automatic entity creation for manufacturers, brands, variants, and categories',
+  })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Bulk product creation completed',
+    type: BulkProductCreationResponse,
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid CSV data format or validation errors',
+  })
+  @ApiUnauthorizedResponse({ description: 'Authentication required' })
+  @ApiForbiddenResponse({ description: 'Admin access required' })
+  @AuditLog({ action: 'BULK_CREATE', resource: 'product' })
+  async createBulk(
+    @Body() bulkProductDto: BulkProductCreationDto,
+    @CurrentUserId() userId: string,
+  ): Promise<BulkProductCreationResponse> {
+    const summary = await this.bulkProductCreationService.createBulkProducts(
+      bulkProductDto.data,
+      userId,
+    );
+
+    return {
+      success: true,
+      message: `Bulk product creation completed. ${summary.successfulProducts} products created successfully.`,
+      summary,
+    };
   }
 
   @Get()

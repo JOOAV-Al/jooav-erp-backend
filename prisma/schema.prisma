@@ -239,7 +239,7 @@ model Product {
   packagingType   String        // e.g., "Single Pack", "5-Pack", "Box", "PET Bottle", "Tin"
   
   // Pricing (Wholesale price)
-  price           Decimal       @db.Decimal(10,2)
+  price           Decimal?      @db.Decimal(10,2)
   discount        Decimal?      @db.Decimal(5,2) // Discount percentage (0-100)
   
   // Media
