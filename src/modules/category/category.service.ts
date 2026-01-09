@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CacheInvalidationService } from '../cache/cache-invalidation.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { CategoryQueryDto } from './dto/category-query.dto';
@@ -14,8 +15,13 @@ import { StringUtils } from '../../common/utils/string.utils';
 
 @Injectable()
 export class CategoryService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cacheInvalidationService: CacheInvalidationService,
+  ) {}
 
+  /**
+   * Create a new category
   /**
    * Create a new category
    */
@@ -51,6 +57,9 @@ export class CategoryService {
           parent: true,
         },
       });
+
+      // Invalidate category caches
+      await this.cacheInvalidationService.invalidateCategories();
 
       return this.transformToResponseDto(category);
     } catch (error) {
@@ -339,6 +348,9 @@ export class CategoryService {
         },
       });
 
+      // Invalidate category caches
+      await this.cacheInvalidationService.invalidateCategory(id);
+
       return this.transformToResponseDto(updatedCategory);
     } catch (error) {
       if (error.code === 'P2002') {
@@ -380,6 +392,9 @@ export class CategoryService {
         isActive: false,
       },
     });
+
+    // Invalidate category caches
+    await this.cacheInvalidationService.invalidateCategory(id);
   }
 
   /**
@@ -405,6 +420,9 @@ export class CategoryService {
         updatedBy: userId,
       },
     });
+
+    // Invalidate category caches
+    await this.cacheInvalidationService.invalidateCategory(id);
   }
 
   /**
@@ -430,6 +448,9 @@ export class CategoryService {
         updatedBy: userId,
       },
     });
+
+    // Invalidate category caches
+    await this.cacheInvalidationService.invalidateCategory(id);
   }
 
   /**
@@ -449,6 +470,9 @@ export class CategoryService {
         updatedBy: userId,
       },
     });
+
+    // Invalidate all category caches for bulk operations
+    await this.cacheInvalidationService.invalidateCategories();
 
     return { updatedCount: result.count };
   }
@@ -470,6 +494,9 @@ export class CategoryService {
         updatedBy: userId,
       },
     });
+
+    // Invalidate all category caches for bulk operations
+    await this.cacheInvalidationService.invalidateCategories();
 
     return { updatedCount: result.count };
   }

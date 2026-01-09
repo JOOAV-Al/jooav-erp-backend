@@ -8,6 +8,7 @@ import {
   Delete,
   Query,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -30,16 +31,20 @@ import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 import { CurrentUserId } from '../../common/decorators/current-user.decorator';
 import { AuditLog } from '../../common/decorators/audit-log.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { Cache } from '../../common/decorators/cache.decorator';
+import { CacheInterceptor } from '../../common/interceptors/cache.interceptor';
+import { UserRole } from '../../common/enums';
 
 @ApiTags('Categories')
 @Controller('categories')
-@UseGuards(UnifiedAuthGuard, RolesGuard)
-@ApiBearerAuth('access-token')
-@ApiBearerAuth('admin-access-token')
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
   @Post()
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiBearerAuth('admin-access-token')
   @ApiOperation({ summary: 'Create a new FMCG product category' })
   @ApiResponse({
     status: 201,
@@ -57,8 +62,14 @@ export class CategoryController {
   }
 
   @Get()
+  @UseInterceptors(CacheInterceptor)
+  @Cache({
+    key: 'categories',
+    ttl: 900, // 15 minutes - categories don't change frequently
+    includeParams: true,
+  })
   @ApiOperation({
-    summary: 'Get all FMCG categories with pagination and filters',
+    summary: 'Get all FMCG categories (Accessible to everyone)',
   })
   @ApiResponse({
     status: 200,
@@ -100,9 +111,14 @@ export class CategoryController {
   }
 
   @Get('tree')
+  @UseInterceptors(CacheInterceptor)
+  @Cache({
+    key: 'categories_tree',
+    ttl: 1800, // 30 minutes - tree structure changes even less frequently
+  })
   @ApiOperation({
     summary:
-      'Get FMCG category tree (major categories like Food & Beverages, Personal Care with their subcategories)',
+      'Get FMCG category tree (major categories like Food & Beverages, Personal Care with their subcategories) - (Accessible to everyone)',
   })
   @ApiResponse({
     status: 200,
@@ -114,8 +130,15 @@ export class CategoryController {
   }
 
   @Get('subcategories')
+  @UseInterceptors(CacheInterceptor)
+  @Cache({
+    key: 'categories_subcategories',
+    ttl: 900, // 15 minutes
+    includeParams: true,
+  })
   @ApiOperation({
-    summary: 'Get all subcategories (categories with parent) with pagination',
+    summary:
+      'Get all subcategories (categories with parent) - (Accessible to everyone)',
   })
   @ApiResponse({
     status: 200,
@@ -146,7 +169,7 @@ export class CategoryController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a category by ID' })
+  @ApiOperation({ summary: 'Get a category by ID (Accessible to everyone)' })
   @ApiParam({ name: 'id', description: 'Category ID' })
   @ApiResponse({
     status: 200,
@@ -167,6 +190,9 @@ export class CategoryController {
   }
 
   @Patch(':id')
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiBearerAuth('admin-access-token')
   @ApiOperation({ summary: 'Update a category' })
   @ApiParam({ name: 'id', description: 'Category ID' })
   @ApiResponse({
@@ -186,6 +212,9 @@ export class CategoryController {
   }
 
   @Patch(':id/activate')
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiBearerAuth('admin-access-token')
   @ApiOperation({ summary: 'Activate a category' })
   @ApiParam({ name: 'id', description: 'Category ID' })
   @ApiResponse({ status: 200, description: 'Category activated successfully' })
@@ -199,6 +228,9 @@ export class CategoryController {
   }
 
   @Patch(':id/deactivate')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @ApiBearerAuth('admin-access-token')
   @ApiOperation({ summary: 'Deactivate a category' })
   @ApiParam({ name: 'id', description: 'Category ID' })
   @ApiResponse({
@@ -215,6 +247,9 @@ export class CategoryController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @ApiBearerAuth('admin-access-token')
   @ApiOperation({ summary: 'Delete a category (soft delete)' })
   @ApiParam({ name: 'id', description: 'Category ID' })
   @ApiResponse({ status: 200, description: 'Category deleted successfully' })
@@ -232,6 +267,9 @@ export class CategoryController {
   }
 
   @Post('bulk-activate')
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiBearerAuth('admin-access-token')
   @ApiOperation({
     summary:
       'Bulk activate FMCG categories (e.g., activate seasonal categories)',
@@ -259,6 +297,9 @@ export class CategoryController {
   }
 
   @Post('bulk-deactivate')
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiBearerAuth('admin-access-token')
   @ApiOperation({
     summary:
       'Bulk deactivate FMCG categories (e.g., disable discontinued product categories)',

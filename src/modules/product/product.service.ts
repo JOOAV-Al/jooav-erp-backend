@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { CacheInvalidationService } from '../cache/cache-invalidation.service';
 import {
   CreateProductDto,
   UpdateProductDto,
@@ -22,6 +23,7 @@ export class ProductService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditService,
+    private readonly cacheInvalidationService: CacheInvalidationService,
   ) {}
 
   /**
@@ -230,6 +232,9 @@ export class ProductService {
         },
       });
 
+      // Invalidate product caches
+      await this.cacheInvalidationService.invalidateProducts();
+
       return product;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -286,6 +291,9 @@ export class ProductService {
           brand: {
             select: { id: true, name: true },
           },
+          variant: {
+            select: { id: true, name: true, description: true },
+          },
           category: {
             select: {
               id: true,
@@ -323,6 +331,9 @@ export class ProductService {
       include: {
         brand: {
           select: { id: true, name: true },
+        },
+        variant: {
+          select: { id: true, name: true, description: true },
         },
         category: {
           select: {
@@ -462,6 +473,9 @@ export class ProductService {
         },
       });
 
+      // Invalidate product caches
+      await this.cacheInvalidationService.invalidateProduct(id);
+
       return product;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -506,6 +520,9 @@ export class ProductService {
         sku: existingProduct.sku,
       },
     });
+
+    // Invalidate product caches
+    await this.cacheInvalidationService.invalidateProduct(id);
   }
 
   async activate(id: string, userId: string): Promise<ProductResponseDto> {
@@ -551,6 +568,9 @@ export class ProductService {
         sku: product.sku,
       },
     });
+
+    // Invalidate product caches
+    await this.cacheInvalidationService.invalidateProduct(id);
 
     return updatedProduct;
   }
@@ -598,6 +618,9 @@ export class ProductService {
         sku: product.sku,
       },
     });
+
+    // Invalidate product caches
+    await this.cacheInvalidationService.invalidateProduct(id);
 
     return updatedProduct;
   }

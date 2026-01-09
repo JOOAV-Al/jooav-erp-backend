@@ -26,12 +26,6 @@ export class CreateProductDto {
   @MaxLength(500)
   description?: string;
 
-  @ApiPropertyOptional({
-    description:
-      'Product barcode (UPC/EAN) - Auto-generated if not provided. Currently not used but kept for future implementation.',
-    example: '8901058005042',
-    required: false,
-  })
   @IsOptional()
   @IsString()
   barcode?: string;
@@ -88,16 +82,20 @@ export class CreateProductDto {
   @MaxLength(50)
   packagingType: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Wholesale price in Naira',
     example: 120.0,
     type: 'number',
     format: 'decimal',
   })
-  @IsNotEmpty()
-  @Transform(({ value }) => (value ? new Decimal(value) : undefined))
+  @IsOptional()
+  @Transform(({ value }) =>
+    value !== null && value !== undefined && value !== ''
+      ? new Decimal(value)
+      : undefined,
+  )
   // @IsDecimal()
-  price: Decimal;
+  price?: Decimal;
 
   @ApiPropertyOptional({
     description: 'Discount percentage (0-100)',
@@ -108,7 +106,11 @@ export class CreateProductDto {
     maximum: 100,
   })
   @IsOptional()
-  @Transform(({ value }) => (value ? new Decimal(value) : undefined))
+  @Transform(({ value }) =>
+    value !== null && value !== undefined && value !== ''
+      ? new Decimal(value)
+      : undefined,
+  )
   discount?: Decimal;
 
   @ApiPropertyOptional({

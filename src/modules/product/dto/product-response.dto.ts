@@ -77,8 +77,9 @@ export class ProductResponseDto {
     description: 'Wholesale price in Naira',
     example: 120.0,
     type: 'number',
+    required: false,
   })
-  price: Decimal;
+  price: Decimal | null;
 
   @ApiProperty({
     description: 'Discount percentage (0-100)',
