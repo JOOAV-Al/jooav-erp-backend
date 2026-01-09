@@ -28,7 +28,7 @@ export class AdminProfileDto {
 
   @ApiProperty({
     description:
-      'Admin role in the platform (SUPER_ADMIN, ADMIN, SUB_ADMIN, SME_USER)',
+      'Admin role in the platform (SUPER_ADMIN, ADMIN, PROCUREMENT_OFFICER, SME_USER)',
     enum: UserRole,
     example: UserRole.SUPER_ADMIN,
   })

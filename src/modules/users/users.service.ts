@@ -8,7 +8,9 @@ import { UserRole, UserStatus, User } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { generatePasswordResetToken } from '../../common/utils/token.util';
 import { AuditService } from '../audit/audit.service';
+import { EmailService } from '../email/email.service';
 import { ConfigService } from '@nestjs/config';
 import { PaginationDto, PaginatedResponse } from '../../common/dto';
 import {
@@ -32,6 +34,7 @@ export class UsersService {
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
+    private emailService: EmailService,
     private configService: ConfigService,
   ) {}
 
@@ -163,7 +166,7 @@ export class UsersService {
       throw new ConflictException(`User with this ${field} already exists`);
     }
 
-    // Generate a temporary password
+    // Generate a temporary password (will be reset via email)
     const temporaryPassword = this.generateTemporaryPassword();
     const hashedPassword = await argon2.hash(
       temporaryPassword,
@@ -190,6 +193,32 @@ export class UsersService {
       include: { profile: true },
     });
 
+    // Generate password reset token
+    const { token: resetToken, expiresAt } = generatePasswordResetToken(24);
+
+    // Store password reset token
+    await this.prisma.passwordReset.create({
+      data: {
+        email: user.email,
+        token: resetToken,
+        expiresAt,
+      },
+    });
+
+    // Send password setup email
+    try {
+      const resetUrl = `${this.configService.get('email.baseUrl')}/reset-password?token=${resetToken}`;
+
+      await this.emailService.sendTemplatedEmail(user.email, 'passwordSetup', {
+        firstName: user.firstName || 'User',
+        resetUrl,
+        platformName: 'JOOAV ERP',
+      });
+    } catch (error) {
+      // Log email error but don't fail user creation
+      console.error('Failed to send password setup email:', error);
+    }
+
     // Log user creation
     await this.auditService.logUserAction(
       createdBy,
@@ -199,17 +228,12 @@ export class UsersService {
       {
         email: user.email,
         role: user.role,
-        temporaryPassword, // In production, send this via secure channel
       },
       request,
     );
 
     const { password, ...userWithoutPassword } = user;
-    return {
-      ...userWithoutPassword,
-      // Include temporary password in response for admin
-      temporaryPassword,
-    } as UserProfileDto & { temporaryPassword: string };
+    return userWithoutPassword as UserProfileDto;
   }
 
   /**
@@ -397,18 +421,8 @@ export class UsersService {
       data: {
         profile: {
           upsert: {
-            create: {
-              ...updateProfileDto,
-              dateOfBirth: updateProfileDto.dateOfBirth
-                ? new Date(updateProfileDto.dateOfBirth)
-                : undefined,
-            },
-            update: {
-              ...updateProfileDto,
-              dateOfBirth: updateProfileDto.dateOfBirth
-                ? new Date(updateProfileDto.dateOfBirth)
-                : undefined,
-            },
+            create: updateProfileDto,
+            update: updateProfileDto,
           },
         },
         updatedAt: new Date(),
@@ -556,5 +570,45 @@ export class UsersService {
     }
 
     return result;
+  }
+
+  /**
+   * Get user activity log (Admin only)
+   */
+  async getUserActivity(userId: string, paginationDto: PaginationDto) {
+    // Verify user exists
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Get audit logs for this user
+    const { page = 1, limit = 10 } = paginationDto;
+    const skip = (page - 1) * limit;
+
+    const [logs, total] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where: { userId: userId },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.auditLog.count({ where: { userId: userId } }),
+    ]);
+
+    return {
+      data: logs,
+      meta: {
+        page,
+        limit,
+        totalItems: total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page * limit < total,
+        hasPreviousPage: page > 1,
+      },
+    };
   }
 }

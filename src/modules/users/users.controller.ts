@@ -332,4 +332,42 @@ export class UsersController {
       req,
     );
   }
+
+  // ================================
+  // USER ACTIVITY LOGS (ADMIN ONLY)
+  // ================================
+
+  @Get(':id/activity')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Get user activity log',
+    description: 'Retrieve activity logs for a specific user (Admin only)',
+  })
+  @ApiParam({ name: 'id', description: 'User ID' })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User activity log retrieved successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin only' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async getUserActivity(
+    @Param('id') userId: string,
+    @Query() paginationDto: PaginationDto,
+  ) {
+    return this.usersService.getUserActivity(userId, paginationDto);
+  }
 }

@@ -47,7 +47,6 @@ export class PrismaService
       this.userSession.deleteMany(),
       this.userProfile.deleteMany(),
       this.auditLog.deleteMany(),
-      this.customer.deleteMany(),
       this.user.deleteMany(),
     ];
 

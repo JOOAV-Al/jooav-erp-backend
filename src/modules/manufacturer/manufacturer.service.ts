@@ -660,7 +660,6 @@ export class ManufacturerService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          customer: true,
           items: {
             include: {
               product: true,

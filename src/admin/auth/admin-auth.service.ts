@@ -101,8 +101,8 @@ export class AdminAuthService {
 
     // Check if account is temporarily locked
     if (
-      admin.superAdminProfile?.accountLockUntil &&
-      new Date() < admin.superAdminProfile.accountLockUntil
+      admin.adminProfile?.accountLockUntil &&
+      new Date() < admin.adminProfile.accountLockUntil
     ) {
       await this.logAdminAuditEvent(
         admin.id,
@@ -150,8 +150,8 @@ export class AdminAuthService {
     });
 
     // Update admin profile activity
-    if (admin.superAdminProfile) {
-      await this.prisma.superAdminProfile.update({
+    if (admin.adminProfile) {
+      await this.prisma.adminProfile.update({
         where: { userId: admin.id },
         data: { lastActivity: new Date() },
       });
@@ -272,7 +272,7 @@ export class AdminAuthService {
 
     return {
       role: admin.role,
-      assignedRegions: admin.superAdminProfile?.assignedRegions || [],
+      assignedRegions: admin.adminProfile?.assignedRegions || [],
       permissions: this.generatePermissions(
         admin.role,
         admin.superAdminProfile,

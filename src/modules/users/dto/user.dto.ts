@@ -151,15 +151,6 @@ export class UpdateUserRoleDto {
 
 export class UpdateUserProfileDto {
   @ApiProperty({
-    description: 'Date of birth',
-    example: '1990-01-01',
-    required: false,
-  })
-  @IsOptional()
-  @IsDateString()
-  dateOfBirth?: string;
-
-  @ApiProperty({
     description: 'Address',
     example: '123 Main Street',
     required: false,
@@ -194,24 +185,4 @@ export class UpdateUserProfileDto {
   @IsOptional()
   @IsString()
   country?: string;
-
-  @ApiProperty({
-    description: 'ZIP/Postal code',
-    example: '100001',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  zipCode?: string;
-
-  @ApiProperty({
-    description: 'Bio/Description',
-    example:
-      'Software developer passionate about creating amazing applications.',
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(500, { message: 'Bio cannot exceed 500 characters' })
-  bio?: string;
 }
