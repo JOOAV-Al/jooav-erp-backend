@@ -46,10 +46,10 @@ model User {
   assignedTasks Task[]         @relation("AssignedTo")
 
   // JooavERP specific relations
-  superAdminProfile    SuperAdminProfile?
-  smeProfile           SMEUser?
-  subAdminProfile      SubAdminProfile?
-  createdManufacturers Manufacturer[]     @relation("CreatedManufacturers")
+  adminProfile              AdminProfile?
+  smeProfile                SMEUser?
+  procurementOfficerProfile ProcurementOfficerProfile?
+  createdManufacturers      Manufacturer[]             @relation("CreatedManufacturers")
   updatedManufacturers Manufacturer[]     @relation("UpdatedManufacturers")
   deletedManufacturers Manufacturer[]     @relation("DeletedManufacturers")
   createdBrands        Brand[]            @relation("CreatedBrands")
@@ -71,13 +71,10 @@ model User {
 model UserProfile {
   id          String    @id @default(cuid())
   userId      String    @unique
-  dateOfBirth DateTime?
   address     String?
   city        String?
   state       String?
   country     String?
-  zipCode     String?
-  bio         String?
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -141,29 +138,6 @@ model UserActivity {
 // ================================
 // BUSINESS MODELS
 // ================================
-
-model Customer {
-  id          String         @id @default(cuid())
-  companyName String?
-  contactName String
-  email       String         @unique
-  phone       String?
-  address     String?
-  city        String?
-  state       String?
-  country     String?
-  zipCode     String?
-  status      CustomerStatus @default(ACTIVE)
-
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  orders Order[]
-
-  @@map("customers")
-}
 
 model Category {
   id          String        @id @default(cuid())
@@ -277,10 +251,9 @@ model Product {
 model Order {
   id                 String         @id @default(cuid())
   orderNumber        String         @unique
-  customerId         String? // Made optional for SME orders
   smeUserId          String? // SME who placed the order
   manufacturerId     String? // Manufacturer fulfilling the order
-  assignedSubAdminId String? // Sub-admin handling procurement
+  assignedProcurementOfficerId String? // Procurement officer handling procurement
   createdById        String
   status             OrderStatus    @default(PLACED)
   paymentStatus      PaymentStatus  @default(PENDING)
@@ -310,10 +283,9 @@ model Order {
   updatedAt DateTime @updatedAt
 
   // Relations
-  customer           Customer?           @relation(fields: [customerId], references: [id])
   smeUser            SMEUser?            @relation(fields: [smeUserId], references: [id])
   manufacturer       Manufacturer?       @relation("ManufacturerOrders", fields: [manufacturerId], references: [id])
-  assignedSubAdmin   SubAdminProfile?    @relation("AssignedSubAdmin", fields: [assignedSubAdminId], references: [id])
+  assignedProcurementOfficer   ProcurementOfficerProfile? @relation("AssignedProcurementOfficer", fields: [assignedProcurementOfficerId], references: [id])
   createdBy          User                @relation("CreatedBy", fields: [createdById], references: [id])
   items              OrderItem[]
   payments           Payment[]
@@ -461,7 +433,7 @@ model AuditLog {
 // JOOAV ERP PLATFORM MODELS
 // ================================
 
-model SuperAdminProfile {
+model AdminProfile {
   id               String    @id @default(cuid())
   userId           String    @unique
   permissions      Json? // Granular permissions for platform operations
@@ -470,12 +442,11 @@ model SuperAdminProfile {
   loginAttempts    Int       @default(0)
   accountLockUntil DateTime?
 
-  // Platform management settings
-  canManageManufacturers Boolean @default(true)
-  canApproveSMEs         Boolean @default(true)
-  canManageSubAdmins     Boolean @default(true)
-  canAccessAnalytics     Boolean @default(true)
-  canModifySystemConfig  Boolean @default(false)
+  // Permission flags - Only permissions that differentiate SUPER_ADMIN from ADMIN
+  canModifySystemConfig  Boolean @default(false) // Only SUPER_ADMIN can modify system config
+  canSuspendAdmins       Boolean @default(false) // Only SUPER_ADMIN can suspend other admins
+  canChangeUserRoles     Boolean @default(false) // Only SUPER_ADMIN can change user roles
+  canChangeUserEmails    Boolean @default(false) // Only SUPER_ADMIN can change user emails
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -484,7 +455,7 @@ model SuperAdminProfile {
   // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("super_admin_profiles")
+  @@map("admin_profiles")
 }
 
 model Region {
@@ -502,7 +473,7 @@ model Region {
   // Relations
   manufacturers Manufacturer[]
   smeUsers      SMEUser[]
-  subAdmins     SubAdminProfile[]
+  procurementOfficers ProcurementOfficerProfile[]
 
   @@map("regions")
 }
@@ -608,7 +579,7 @@ model SMEUser {
   @@map("sme_users")
 }
 
-model SubAdminProfile {
+model ProcurementOfficerProfile {
   id         String  @id @default(cuid())
   userId     String  @unique
   regionId   String? // Optional - can be assigned by region or order-based
@@ -629,9 +600,9 @@ model SubAdminProfile {
   // Relations
   user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   region         Region? @relation(fields: [regionId], references: [id])
-  assignedOrders Order[] @relation("AssignedSubAdmin")
+  assignedOrders Order[] @relation("AssignedProcurementOfficer")
 
-  @@map("sub_admin_profiles")
+  @@map("procurement_officer_profiles")
 }
 
 model Inventory {
@@ -708,7 +679,7 @@ model AdminAuditLog {
 enum UserRole {
   SUPER_ADMIN // Platform owner (Jooav management) - highest level
   ADMIN // Regional/operational admin
-  SUB_ADMIN // Procurement officers (can be regional or order-based)
+  PROCUREMENT_OFFICER // Procurement officers (can be regional or order-based)
   SME_USER // Small business owners
 }
 
@@ -718,12 +689,6 @@ enum UserStatus {
   PENDING_APPROVAL
   DEACTIVATED
   BLOCKED
-}
-
-enum CustomerStatus {
-  ACTIVE
-  INACTIVE
-  SUSPENDED
 }
 
 enum ProductStatus {
