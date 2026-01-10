@@ -35,6 +35,7 @@ import {
   UpdateUserStatusDto,
   UpdateUserRoleDto,
   UpdateUserProfileDto,
+  UpdateAdminPermissionsDto,
 } from './dto/user.dto';
 import { UserProfileDto } from '../auth/dto/auth-response.dto';
 
@@ -75,8 +76,13 @@ export class UsersController {
     @Query() paginationDto: PaginationDto,
     @Query('role') role?: UserRole,
     @Query('status') status?: UserStatus,
+    @CurrentUserId() currentUserId?: string,
   ): Promise<PaginatedResponse<UserProfileDto>> {
-    return this.usersService.findAll(paginationDto, { role, status });
+    return this.usersService.findAll(
+      paginationDto,
+      { role, status },
+      currentUserId,
+    );
   }
 
   @Get('stats')
@@ -238,6 +244,43 @@ export class UsersController {
     @Request() req: any,
   ): Promise<UserProfileDto> {
     return this.usersService.updateRole(id, updateRoleDto, currentUserId, req);
+  }
+
+  @Patch(':id/permissions')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Update admin permissions (Super Admin only)' })
+  @ApiParam({ name: 'id', description: 'Admin User ID' })
+  @ApiBody({ type: UpdateAdminPermissionsDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin permissions updated successfully',
+    type: UserProfileDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Super Admin access required',
+  })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 400, description: 'Invalid permissions data' })
+  @AuditLog({
+    action: 'UPDATE_ADMIN_PERMISSIONS',
+    resource: 'ADMIN_PROFILE',
+    includeRequestBody: true,
+  })
+  async updateAdminPermissions(
+    @Param('id') id: string,
+    @Body() updatePermissionsDto: UpdateAdminPermissionsDto,
+    @CurrentUserId() currentUserId: string,
+    @Request() req: any,
+  ): Promise<UserProfileDto> {
+    return this.usersService.updateAdminPermissions(
+      id,
+      updatePermissionsDto,
+      currentUserId,
+      req,
+    );
   }
 
   @Delete(':id')

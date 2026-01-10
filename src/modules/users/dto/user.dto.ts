@@ -8,6 +8,7 @@ import {
   MaxLength,
   IsPhoneNumber,
   IsDateString,
+  IsBoolean,
 } from 'class-validator';
 import { UserRole, UserStatus } from '@prisma/client';
 
@@ -185,4 +186,50 @@ export class UpdateUserProfileDto {
   @IsOptional()
   @IsString()
   country?: string;
+}
+
+export class UpdateAdminPermissionsDto {
+  @ApiProperty({
+    description: 'Can modify system configuration',
+    example: false,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  canModifySystemConfig?: boolean;
+
+  @ApiProperty({
+    description: 'Can suspend other admins',
+    example: false,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  canSuspendAdmins?: boolean;
+
+  @ApiProperty({
+    description: 'Can change user roles',
+    example: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  canChangeUserRoles?: boolean;
+
+  @ApiProperty({
+    description: 'Can change user emails',
+    example: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  canChangeUserEmails?: boolean;
+
+  @ApiProperty({
+    description: 'Assigned regions for management',
+    example: ['NG-LA', 'NG-AB'],
+    required: false,
+  })
+  @IsOptional()
+  assignedRegions?: string[];
 }
