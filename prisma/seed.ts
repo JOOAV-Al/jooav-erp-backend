@@ -33,18 +33,16 @@ async function main() {
       emailVerified: true,
       profile: {
         create: {
-          bio: 'Platform Super Administrator',
           country: 'Nigeria',
         },
       },
-      superAdminProfile: {
+      adminProfile: {
         create: {
-          // Super Admin is platform owner - no regional restrictions
-          canManageManufacturers: true,
-          canApproveSMEs: true,
-          canManageSubAdmins: true,
-          canAccessAnalytics: true,
+          // Super Admin has full platform control
           canModifySystemConfig: true,
+          canSuspendAdmins: true,
+          canChangeUserRoles: true,
+          canChangeUserEmails: true,
         },
       },
     },
@@ -64,18 +62,16 @@ async function main() {
       emailVerified: true,
       profile: {
         create: {
-          bio: 'System Administrator',
           country: 'Nigeria',
         },
       },
-      superAdminProfile: {
+      adminProfile: {
         create: {
-          assignedRegions: ['Lagos', 'Abuja'], // Example regional assignment
-          canManageManufacturers: true,
-          canApproveSMEs: true,
-          canManageSubAdmins: false, // Limited permissions for regular admin
-          canAccessAnalytics: true,
-          canModifySystemConfig: false,
+          assignedRegions: ['Lagos', 'Abuja'], // Regional assignment
+          canModifySystemConfig: false, // Limited - cannot modify system config
+          canSuspendAdmins: false, // Limited - cannot suspend other admins
+          canChangeUserRoles: false, // Limited - cannot change user roles
+          canChangeUserEmails: false, // Limited - cannot change user emails
         },
       },
     },
@@ -90,16 +86,15 @@ async function main() {
       firstName: 'Procurement',
       lastName: 'Officer',
       password: await hashPassword('password123'), // Argon2 hashed
-      role: UserRole.SUB_ADMIN,
+      role: UserRole.PROCUREMENT_OFFICER,
       status: UserStatus.ACTIVE,
       emailVerified: true,
       profile: {
         create: {
-          bio: 'Regional Procurement Officer',
           country: 'Nigeria',
         },
       },
-      subAdminProfile: {
+      procurementOfficerProfile: {
         create: {
           employeeId: 'SUB001',
           // regionId: undefined, // Optional - can be assigned later for scalability
@@ -124,7 +119,6 @@ async function main() {
       emailVerified: true,
       profile: {
         create: {
-          bio: 'Small Business Owner',
           country: 'Nigeria',
         },
       },
