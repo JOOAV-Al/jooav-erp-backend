@@ -74,7 +74,7 @@ export class CacheInterceptor implements NestInterceptor {
   private generateCacheKey(request: Request, options: CacheOptions): string {
     const { method, url, query, params } = request;
 
-    let keyParts = [
+    const keyParts = [
       method.toLowerCase(),
       request.route?.path || url.split('?')[0],
     ];
