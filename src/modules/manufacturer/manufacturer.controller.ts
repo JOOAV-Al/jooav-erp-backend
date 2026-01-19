@@ -109,25 +109,13 @@ export class ManufacturerController {
     name: 'search',
     required: false,
     type: String,
-    description: 'Search in name, email, or description',
+    description: 'Search in name or description',
   })
   @ApiQuery({
     name: 'status',
     required: false,
     enum: ManufacturerStatus,
     description: 'Filter by status',
-  })
-  @ApiQuery({
-    name: 'country',
-    required: false,
-    type: String,
-    description: 'Filter by country',
-  })
-  @ApiQuery({
-    name: 'state',
-    required: false,
-    type: String,
-    description: 'Filter by state',
   })
   @ApiQuery({
     name: 'includeBrands',
@@ -168,8 +156,6 @@ export class ManufacturerController {
     const filtersDto = {
       search: queryDto.search,
       status: queryDto.status,
-      country: queryDto.country,
-      state: queryDto.state,
     };
 
     const includesDto = {
@@ -552,19 +538,7 @@ export class ManufacturerController {
     name: 'search',
     required: false,
     type: String,
-    description: 'Search in name, email, or description',
-  })
-  @ApiQuery({
-    name: 'country',
-    required: false,
-    type: String,
-    description: 'Filter by country',
-  })
-  @ApiQuery({
-    name: 'state',
-    required: false,
-    type: String,
-    description: 'Filter by state',
+    description: 'Search in name or description',
   })
   @ApiResponse({
     status: 200,
@@ -619,8 +593,6 @@ export class ManufacturerController {
 
     const filtersDto = {
       search: queryDto.search,
-      country: queryDto.country,
-      state: queryDto.state,
     };
 
     return this.manufacturerService.getDeletedManufacturers(
