@@ -66,19 +66,6 @@ export class ManufacturerService {
       throw new ConflictException('Manufacturer with this name already exists');
     }
 
-    // Check registration number uniqueness if provided
-    if (createDto.registrationNumber) {
-      const existingByRegNumber = await this.prisma.manufacturer.findUnique({
-        where: { registrationNumber: createDto.registrationNumber },
-      });
-
-      if (existingByRegNumber) {
-        throw new ConflictException(
-          'Manufacturer with this registration number already exists',
-        );
-      }
-    }
-
     const manufacturer = await this.prisma.manufacturer.create({
       data: {
         ...createDto,
@@ -119,8 +106,6 @@ export class ManufacturerService {
     filters?: {
       search?: string;
       status?: ManufacturerStatus;
-      country?: string;
-      state?: string;
     },
     includes?: {
       includeBrands?: boolean;
@@ -139,21 +124,12 @@ export class ManufacturerService {
     if (filters?.search) {
       where.OR = [
         { name: { contains: filters.search, mode: 'insensitive' } },
-        { email: { contains: filters.search, mode: 'insensitive' } },
         { description: { contains: filters.search, mode: 'insensitive' } },
       ];
     }
 
     if (filters?.status) {
       where.status = filters.status;
-    }
-
-    if (filters?.country) {
-      where.country = filters.country;
-    }
-
-    if (filters?.state) {
-      where.state = filters.state;
     }
 
     // Build dynamic include object
@@ -333,25 +309,6 @@ export class ManufacturerService {
       }
     }
 
-    // Check registration number uniqueness if being updated
-    if (
-      updateDto.registrationNumber &&
-      updateDto.registrationNumber !== existingManufacturer.registrationNumber
-    ) {
-      const duplicateRegNumber = await this.prisma.manufacturer.findFirst({
-        where: {
-          registrationNumber: updateDto.registrationNumber,
-          id: { not: id },
-        },
-      });
-
-      if (duplicateRegNumber) {
-        throw new ConflictException(
-          'Manufacturer with this registration number already exists',
-        );
-      }
-    }
-
     // Prepare update data with sanitized name if provided
     const updateData: any = {
       ...updateDto,
@@ -511,7 +468,6 @@ export class ManufacturerService {
     totalProducts: number;
     totalOrders: number;
     createdThisMonth: number;
-    topCountries: Array<{ country: string; count: number }>;
   }> {
     // Calculate date for this month
     const now = new Date();
@@ -525,7 +481,6 @@ export class ManufacturerService {
       totalProducts,
       totalOrders,
       createdThisMonth,
-      countryStats,
     ] = await Promise.all([
       this.prisma.manufacturer.count(),
       this.prisma.manufacturer.count({
@@ -546,26 +501,7 @@ export class ManufacturerService {
           },
         },
       }),
-      this.prisma.manufacturer.groupBy({
-        by: ['country'],
-        _count: {
-          country: true,
-        },
-        orderBy: {
-          _count: {
-            country: 'desc',
-          },
-        },
-        take: 5, // Top 5 countries
-      }),
     ]);
-
-    const topCountries = countryStats
-      .filter((stat) => stat.country !== null)
-      .map((stat) => ({
-        country: stat.country as string,
-        count: stat._count.country,
-      }));
 
     return {
       total: totalManufacturers,
@@ -575,7 +511,6 @@ export class ManufacturerService {
       totalProducts,
       totalOrders,
       createdThisMonth,
-      topCountries,
     };
   }
 
@@ -703,14 +638,6 @@ export class ManufacturerService {
       id: manufacturer.id,
       name: manufacturer.name,
       description: manufacturer.description,
-      email: manufacturer.email,
-      phone: manufacturer.phone,
-      website: manufacturer.website,
-      address: manufacturer.address,
-      city: manufacturer.city,
-      state: manufacturer.state,
-      country: manufacturer.country,
-      registrationNumber: manufacturer.registrationNumber,
       status: manufacturer.status,
       createdAt: manufacturer.createdAt,
       updatedAt: manufacturer.updatedAt,
@@ -754,8 +681,6 @@ export class ManufacturerService {
     paginationDto: PaginationDto,
     filters?: {
       search?: string;
-      country?: string;
-      state?: string;
     },
   ): Promise<
     PaginatedResponse<
@@ -775,17 +700,8 @@ export class ManufacturerService {
     if (filters?.search) {
       where.OR = [
         { name: { contains: filters.search, mode: 'insensitive' } },
-        { email: { contains: filters.search, mode: 'insensitive' } },
         { description: { contains: filters.search, mode: 'insensitive' } },
       ];
-    }
-
-    if (filters?.country) {
-      where.country = filters.country;
-    }
-
-    if (filters?.state) {
-      where.state = filters.state;
     }
 
     const [manufacturers, total] = await Promise.all([

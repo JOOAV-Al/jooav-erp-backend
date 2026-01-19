@@ -253,7 +253,6 @@ export class BulkProductCreationService {
     const manufacturer = await tx.manufacturer.create({
       data: {
         name,
-        email: `info@${name.toLowerCase().replace(/\s+/g, '')}.com`, // Placeholder email
         status: 'ACTIVE',
         createdBy: userId,
         updatedBy: userId,

@@ -212,13 +212,6 @@ export class BrandService {
           id: true,
           name: true,
           status: true,
-          email: true,
-          phone: true,
-          website: true,
-          address: true,
-          city: true,
-          state: true,
-          country: true,
         },
       };
     }
@@ -291,13 +284,6 @@ export class BrandService {
           id: true,
           name: true,
           status: true,
-          email: true,
-          phone: true,
-          website: true,
-          address: true,
-          city: true,
-          state: true,
-          country: true,
         },
       };
     }

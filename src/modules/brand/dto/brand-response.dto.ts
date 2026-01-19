@@ -10,29 +10,6 @@ export class BrandManufacturerDto {
 
   @ApiProperty({ example: 'ACTIVE' })
   status: string;
-
-  @ApiPropertyOptional({ example: 'info@nestle.com.ng' })
-  email?: string;
-
-  @ApiPropertyOptional({ example: '+234-1-280-0000' })
-  phone?: string;
-
-  @ApiPropertyOptional({
-    example: 'https://www.nestle-cwa.com/en/nestle-nigeria',
-  })
-  website?: string;
-
-  @ApiPropertyOptional({ example: '22-24 Industrial Avenue, Ilupeju' })
-  address?: string;
-
-  @ApiPropertyOptional({ example: 'Lagos' })
-  city?: string;
-
-  @ApiPropertyOptional({ example: 'Lagos' })
-  state?: string;
-
-  @ApiPropertyOptional({ example: 'Nigeria' })
-  country?: string;
 }
 
 export class BrandProductDto {
