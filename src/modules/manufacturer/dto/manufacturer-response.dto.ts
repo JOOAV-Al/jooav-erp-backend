@@ -106,54 +106,6 @@ export class ManufacturerResponseDto {
   description?: string;
 
   @ApiProperty({
-    description: 'Contact email address',
-    example: 'contact@nestle.com',
-  })
-  email: string;
-
-  @ApiPropertyOptional({
-    description: 'Contact phone number',
-    example: '+1-555-123-4567',
-  })
-  phone?: string;
-
-  @ApiPropertyOptional({
-    description: 'Company website URL',
-    example: 'https://www.nestle.com',
-  })
-  website?: string;
-
-  @ApiPropertyOptional({
-    description: 'Street address',
-    example: '1-7-1 Konan, Minato-ku',
-  })
-  address?: string;
-
-  @ApiPropertyOptional({
-    description: 'City',
-    example: 'Lagos',
-  })
-  city?: string;
-
-  @ApiPropertyOptional({
-    description: 'State or province',
-    example: 'Lagos',
-  })
-  state?: string;
-
-  @ApiPropertyOptional({
-    description: 'Country',
-    example: 'Nigeria',
-  })
-  country?: string;
-
-  @ApiPropertyOptional({
-    description: 'Business registration number',
-    example: 'TK-123456789',
-  })
-  registrationNumber?: string;
-
-  @ApiProperty({
     description: 'Manufacturer status',
     enum: ManufacturerStatus,
     example: ManufacturerStatus.ACTIVE,
@@ -247,18 +199,20 @@ export class ManufacturerStatsDto {
   suspended: number;
 
   @ApiProperty({
+    description: 'Total number of products by all manufacturers',
+    example: 450,
+  })
+  totalProducts: number;
+
+  @ApiProperty({
+    description: 'Total number of orders processed',
+    example: 789,
+  })
+  totalOrders: number;
+
+  @ApiProperty({
     description: 'Number of manufacturers created this month',
     example: 5,
   })
   createdThisMonth: number;
-
-  @ApiProperty({
-    description: 'Top countries by manufacturer count',
-    example: [
-      { country: 'Nigeria', count: 15 },
-      { country: 'USA', count: 12 },
-      { country: 'Germany', count: 8 },
-    ],
-  })
-  topCountries: Array<{ country: string; count: number }>;
 }

@@ -483,20 +483,6 @@ model Manufacturer {
   name        String  @unique
   description String?
 
-  // Contact Information
-  email   String
-  phone   String?
-  website String?
-
-  // Address
-  address String?
-  city    String?
-  state   String?
-  country String?
-
-  // Business Details
-  registrationNumber String? @unique
-
   // ERP Management
   status ManufacturerStatus @default(ACTIVE)
 
