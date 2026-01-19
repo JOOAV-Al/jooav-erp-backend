@@ -33,6 +33,8 @@ import {
 } from '../../common/decorators/current-user.decorator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
+import { SuccessResponse } from '../../common/dto/api-response.dto';
+import { ResponseMessages } from '../../common/utils/response-messages.util';
 import {
   CreateManufacturerDto,
   UpdateManufacturerDto,
@@ -82,8 +84,16 @@ export class ManufacturerController {
     @Body() createManufacturerDto: CreateManufacturerDto,
     @CurrentUserId() adminId: string,
     @Request() req: any,
-  ): Promise<ManufacturerResponseDto> {
-    return this.manufacturerService.create(createManufacturerDto, adminId, req);
+  ): Promise<SuccessResponse<ManufacturerResponseDto>> {
+    const manufacturer = await this.manufacturerService.create(
+      createManufacturerDto,
+      adminId,
+      req,
+    );
+    return new SuccessResponse(
+      ResponseMessages.created('Manufacturer', manufacturer.name),
+      manufacturer,
+    );
   }
 
   @Get()
@@ -146,7 +156,7 @@ export class ManufacturerController {
   })
   async findAll(
     @Query() queryDto: ManufacturerQueryDto,
-  ): Promise<PaginatedResponse<ManufacturerResponseDto>> {
+  ): Promise<SuccessResponse<PaginatedResponse<ManufacturerResponseDto>>> {
     // Create proper pagination DTO
     const paginationDto = new PaginationDto();
     paginationDto.page = queryDto.page ? parseInt(queryDto.page, 10) : 1;
@@ -163,11 +173,21 @@ export class ManufacturerController {
       includeProducts: queryDto.includeProducts,
       includeAuditInfo: queryDto.includeAuditInfo,
     };
-    console.log('Include parameters received:', includesDto);
-    return this.manufacturerService.findAll(
+
+    const result = await this.manufacturerService.findAll(
       paginationDto,
       filtersDto,
       includesDto,
+    );
+
+    return new SuccessResponse(
+      ResponseMessages.foundItems(
+        result.data.length,
+        'Manufacturer',
+        result.meta.totalItems,
+      ),
+      result,
+      result.meta,
     );
   }
 
@@ -187,8 +207,12 @@ export class ManufacturerController {
     status: 403,
     description: 'Forbidden - Admin access required',
   })
-  async getStats(): Promise<ManufacturerStatsDto> {
-    return this.manufacturerService.getStats();
+  async getStats(): Promise<SuccessResponse<ManufacturerStatsDto>> {
+    const stats = await this.manufacturerService.getStats();
+    return new SuccessResponse(
+      ResponseMessages.statsRetrieved('Manufacturer'),
+      stats,
+    );
   }
 
   @Get(':id')
@@ -234,14 +258,21 @@ export class ManufacturerController {
     @Query('includeBrands') includeBrands?: boolean,
     @Query('includeProducts') includeProducts?: boolean,
     @Query('includeAuditInfo') includeAuditInfo?: boolean,
-  ): Promise<ManufacturerResponseDto> {
+  ): Promise<SuccessResponse<ManufacturerResponseDto>> {
     const includesDto = {
       includeBrands,
       includeProducts,
       includeAuditInfo,
     };
 
-    return this.manufacturerService.findOne(id, includesDto);
+    const manufacturer = await this.manufacturerService.findOne(
+      id,
+      includesDto,
+    );
+    return new SuccessResponse(
+      ResponseMessages.retrieved('Manufacturer', manufacturer.name),
+      manufacturer,
+    );
   }
 
   @Patch(':id')
@@ -275,12 +306,16 @@ export class ManufacturerController {
     @Body() updateManufacturerDto: UpdateManufacturerDto,
     @CurrentUserId() adminId: string,
     @Request() req: any,
-  ): Promise<ManufacturerResponseDto> {
-    return this.manufacturerService.update(
+  ): Promise<SuccessResponse<ManufacturerResponseDto>> {
+    const manufacturer = await this.manufacturerService.update(
       id,
       updateManufacturerDto,
       adminId,
       req,
+    );
+    return new SuccessResponse(
+      ResponseMessages.updated('Manufacturer', manufacturer.name),
+      manufacturer,
     );
   }
 
@@ -320,8 +355,14 @@ export class ManufacturerController {
     @Param('id') id: string,
     @CurrentUserId() adminId: string,
     @Request() req: any,
-  ): Promise<{ message: string }> {
-    return this.manufacturerService.remove(id, adminId, req);
+  ): Promise<SuccessResponse<null>> {
+    const result = await this.manufacturerService.remove(id, adminId, req);
+    // Extract manufacturer name from the service response if available
+    const manufacturerName = result.manufacturerName || 'Manufacturer';
+    return new SuccessResponse(
+      ResponseMessages.deleted('Manufacturer', manufacturerName),
+      null,
+    );
   }
 
   // ================================
@@ -354,12 +395,20 @@ export class ManufacturerController {
     @Body() statusDto: UpdateManufacturerStatusDto,
     @CurrentUserId() adminId: string,
     @Request() req: any,
-  ): Promise<ManufacturerResponseDto> {
-    return this.manufacturerService.updateStatus(
+  ): Promise<SuccessResponse<ManufacturerResponseDto>> {
+    const manufacturer = await this.manufacturerService.updateStatus(
       id,
       statusDto.status,
       adminId,
       req,
+    );
+    return new SuccessResponse(
+      ResponseMessages.statusChanged(
+        'Manufacturer',
+        manufacturer.name,
+        statusDto.status,
+      ),
+      manufacturer,
     );
   }
 
@@ -388,12 +437,16 @@ export class ManufacturerController {
     @Param('id') id: string,
     @CurrentUserId() adminId: string,
     @Request() req: any,
-  ): Promise<ManufacturerResponseDto> {
-    return this.manufacturerService.updateStatus(
+  ): Promise<SuccessResponse<ManufacturerResponseDto>> {
+    const manufacturer = await this.manufacturerService.updateStatus(
       id,
       ManufacturerStatus.ACTIVE,
       adminId,
       req,
+    );
+    return new SuccessResponse(
+      ResponseMessages.activated('Manufacturer', manufacturer.name),
+      manufacturer,
     );
   }
 
@@ -422,12 +475,16 @@ export class ManufacturerController {
     @Param('id') id: string,
     @CurrentUserId() adminId: string,
     @Request() req: any,
-  ): Promise<ManufacturerResponseDto> {
-    return this.manufacturerService.updateStatus(
+  ): Promise<SuccessResponse<ManufacturerResponseDto>> {
+    const manufacturer = await this.manufacturerService.updateStatus(
       id,
       ManufacturerStatus.SUSPENDED,
       adminId,
       req,
+    );
+    return new SuccessResponse(
+      ResponseMessages.suspended('Manufacturer', manufacturer.name),
+      manufacturer,
     );
   }
 
@@ -469,8 +526,21 @@ export class ManufacturerController {
   async getManufacturerProducts(
     @Param('id') id: string,
     @Query() paginationDto: PaginationDto,
-  ): Promise<any> {
-    return this.manufacturerService.getManufacturerProducts(id, paginationDto);
+  ): Promise<SuccessResponse<any>> {
+    const result = await this.manufacturerService.getManufacturerProducts(
+      id,
+      paginationDto,
+    );
+    const { manufacturerName, ...paginatedData } = result;
+    return new SuccessResponse(
+      ResponseMessages.foundItems(
+        paginatedData.data.length,
+        `${manufacturerName} product`,
+        paginatedData.meta?.totalItems,
+      ),
+      paginatedData,
+      paginatedData.meta,
+    );
   }
 
   @Get(':id/orders')
@@ -507,8 +577,21 @@ export class ManufacturerController {
   async getManufacturerOrders(
     @Param('id') id: string,
     @Query() paginationDto: PaginationDto,
-  ): Promise<any> {
-    return this.manufacturerService.getManufacturerOrders(id, paginationDto);
+  ): Promise<SuccessResponse<any>> {
+    const result = await this.manufacturerService.getManufacturerOrders(
+      id,
+      paginationDto,
+    );
+    const { manufacturerName, ...paginatedData } = result;
+    return new SuccessResponse(
+      ResponseMessages.foundItems(
+        paginatedData.data.length,
+        `${manufacturerName} order`,
+        paginatedData.meta?.totalItems,
+      ),
+      paginatedData,
+      paginatedData.meta,
+    );
   }
 
   // ================================
@@ -581,10 +664,12 @@ export class ManufacturerController {
   async getDeletedManufacturers(
     @Query() queryDto: ManufacturerQueryDto,
   ): Promise<
-    PaginatedResponse<
-      ManufacturerResponseDto & {
-        deletedBy: { id: string; email: string; name: string };
-      }
+    SuccessResponse<
+      PaginatedResponse<
+        ManufacturerResponseDto & {
+          deletedBy: { id: string; email: string; name: string };
+        }
+      >
     >
   > {
     const paginationDto = new PaginationDto();
@@ -595,9 +680,19 @@ export class ManufacturerController {
       search: queryDto.search,
     };
 
-    return this.manufacturerService.getDeletedManufacturers(
+    const result = await this.manufacturerService.getDeletedManufacturers(
       paginationDto,
       filtersDto,
+    );
+
+    return new SuccessResponse(
+      ResponseMessages.foundItems(
+        result.data.length,
+        'deleted manufacturer',
+        result.meta.totalItems,
+      ),
+      result,
+      result.meta,
     );
   }
 }
