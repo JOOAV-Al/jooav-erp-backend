@@ -96,6 +96,19 @@ export class ResponseMessages {
     return `${count} ${plural} have been deleted successfully`;
   }
 
+  static bulkOperation(
+    operation: string,
+    count: number,
+    entityTypeSingular: string,
+    entityTypePlural?: string,
+  ): string {
+    const plural =
+      count === 1
+        ? entityTypeSingular
+        : entityTypePlural || `${entityTypeSingular}s`;
+    return `${count} ${plural} have been ${operation} successfully`;
+  }
+
   // Statistics and analytics
   static statsRetrieved(entityType: string): string {
     return `${entityType} statistics retrieved successfully`;

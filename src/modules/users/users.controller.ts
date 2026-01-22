@@ -28,7 +28,9 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUserId } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AuditLog } from '../../common/decorators/audit-log.decorator';
-import { PaginationDto, PaginatedResponse } from '../../common/dto';
+import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
+import { SuccessResponse } from '../../common/dto/api-response.dto';
+import { ResponseMessages } from '../../common/utils/response-messages.util';
 import {
   CreateUserDto,
   UpdateUserDto,
@@ -38,6 +40,7 @@ import {
   UpdateAdminPermissionsDto,
 } from './dto/user.dto';
 import { UserProfileDto } from '../auth/dto/auth-response.dto';
+import { PaginationDto } from 'src/common/dto';
 
 @ApiTags('Users')
 @Controller('users')
@@ -99,7 +102,8 @@ export class UsersController {
     description: 'Forbidden - Admin access required',
   })
   async getUserStats() {
-    return this.usersService.getUserStats();
+    const stats = await this.usersService.getUserStats();
+    return new SuccessResponse(ResponseMessages.statsRetrieved('User'), stats);
   }
 
   @Post()

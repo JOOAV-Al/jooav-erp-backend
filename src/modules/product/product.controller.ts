@@ -36,6 +36,8 @@ import {
   BulkProductCreationResponse,
 } from './dto/bulk-product-creation.dto';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
+import { SuccessResponse } from '../../common/dto/api-response.dto';
+import { ResponseMessages } from '../../common/utils/response-messages.util';
 import { CurrentUserId } from '../../common/decorators/current-user.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -78,8 +80,12 @@ export class ProductController {
   async create(
     @Body() createProductDto: CreateProductDto,
     @CurrentUserId() userId: string,
-  ): Promise<ProductResponseDto> {
-    return await this.productService.create(createProductDto, userId);
+  ): Promise<SuccessResponse<ProductResponseDto>> {
+    const product = await this.productService.create(createProductDto, userId);
+    return new SuccessResponse(
+      ResponseMessages.created('Product', product.name),
+      product,
+    );
   }
 
   @Post('bulk')
@@ -103,19 +109,21 @@ export class ProductController {
   @ApiForbiddenResponse({ description: 'Admin access required' })
   @AuditLog({ action: 'BULK_CREATE', resource: 'product' })
   async createBulk(
-    @Body() bulkProductDto: BulkProductCreationDto,
+    @Body() bulkCreationDto: BulkProductCreationDto,
     @CurrentUserId() userId: string,
-  ): Promise<BulkProductCreationResponse> {
-    const summary = await this.bulkProductCreationService.createBulkProducts(
-      bulkProductDto.data,
+  ): Promise<SuccessResponse<BulkProductCreationResponse>> {
+    const result = await this.bulkProductCreationService.createBulkProducts(
+      bulkCreationDto.data,
       userId,
     );
-
-    return {
-      success: true,
-      message: `Bulk product creation completed. ${summary.successfulProducts} products created successfully.`,
-      summary,
-    };
+    return new SuccessResponse(
+      ResponseMessages.bulkCreated(result.successfulProducts, 'product'),
+      {
+        success: true,
+        message: `Bulk product creation completed. ${result.successfulProducts} products created successfully.`,
+        summary: result,
+      },
+    );
   }
 
   @Get()
@@ -145,8 +153,16 @@ export class ProductController {
   @ApiQuery({ name: 'includeRelations', required: false, type: Boolean })
   async findAll(
     @Query() query: ProductQueryDto,
-  ): Promise<PaginatedResponse<ProductResponseDto>> {
-    return await this.productService.findAll(query);
+  ): Promise<SuccessResponse<PaginatedResponse<ProductResponseDto>>> {
+    const result = await this.productService.findAll(query);
+    return new SuccessResponse(
+      ResponseMessages.foundItems(
+        result.data.length,
+        'product',
+        result.meta.totalItems,
+      ),
+      result,
+    );
   }
 
   @Get(':id')
@@ -167,8 +183,14 @@ export class ProductController {
     type: ProductResponseDto,
   })
   @ApiNotFoundResponse({ description: 'Product not found' })
-  async findOne(@Param('id') id: string): Promise<ProductResponseDto> {
-    return await this.productService.findOne(id);
+  async findOne(
+    @Param('id') id: string,
+  ): Promise<SuccessResponse<ProductResponseDto>> {
+    const product = await this.productService.findOne(id);
+    return new SuccessResponse(
+      ResponseMessages.retrieved('Product', product.name),
+      product,
+    );
   }
 
   @Patch(':id')
@@ -199,8 +221,16 @@ export class ProductController {
     @Param('id') id: string,
     @Body() updateProductDto: UpdateProductDto,
     @CurrentUserId() userId: string,
-  ): Promise<ProductResponseDto> {
-    return await this.productService.update(id, updateProductDto, userId);
+  ): Promise<SuccessResponse<ProductResponseDto>> {
+    const product = await this.productService.update(
+      id,
+      updateProductDto,
+      userId,
+    );
+    return new SuccessResponse(
+      ResponseMessages.updated('Product', product.name),
+      product,
+    );
   }
 
   @Delete(':id')
@@ -223,8 +253,12 @@ export class ProductController {
   async remove(
     @Param('id') id: string,
     @CurrentUserId() userId: string,
-  ): Promise<void> {
+  ): Promise<SuccessResponse<null>> {
     await this.productService.remove(id, userId);
+    return new SuccessResponse(
+      ResponseMessages.deleted('Product', 'item'),
+      null,
+    );
   }
 
   @Post(':id/activate')
@@ -247,8 +281,12 @@ export class ProductController {
   async activate(
     @Param('id') id: string,
     @CurrentUserId() userId: string,
-  ): Promise<ProductResponseDto> {
-    return await this.productService.activate(id, userId);
+  ): Promise<SuccessResponse<ProductResponseDto>> {
+    const product = await this.productService.activate(id, userId);
+    return new SuccessResponse(
+      ResponseMessages.activated('Product', product.name),
+      product,
+    );
   }
 
   @Post(':id/deactivate')
@@ -271,7 +309,11 @@ export class ProductController {
   async deactivate(
     @Param('id') id: string,
     @CurrentUserId() userId: string,
-  ): Promise<ProductResponseDto> {
-    return await this.productService.deactivate(id, userId);
+  ): Promise<SuccessResponse<ProductResponseDto>> {
+    const product = await this.productService.deactivate(id, userId);
+    return new SuccessResponse(
+      ResponseMessages.deactivated('Product', product.name),
+      product,
+    );
   }
 }

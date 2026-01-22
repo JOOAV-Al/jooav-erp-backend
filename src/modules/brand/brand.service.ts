@@ -530,7 +530,10 @@ export class BrandService {
     return brand;
   }
 
-  async remove(id: string, userId: string): Promise<{ message: string }> {
+  async remove(
+    id: string,
+    userId: string,
+  ): Promise<{ message: string; brandName: string }> {
     const existingBrand = await this.findOne(id);
 
     // Soft delete the brand
@@ -554,7 +557,10 @@ export class BrandService {
     // Invalidate brand-related caches
     await this.cacheInvalidationService.invalidateBrand(id);
 
-    return { message: 'Brand deleted successfully' };
+    return {
+      message: 'Brand deleted successfully',
+      brandName: existingBrand.name,
+    };
   }
 
   async deleteLogo(id: string, userId: string): Promise<BrandResponseDto> {

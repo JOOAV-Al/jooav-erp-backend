@@ -183,11 +183,10 @@ export class ManufacturerController {
     return new SuccessResponse(
       ResponseMessages.foundItems(
         result.data.length,
-        'Manufacturer',
+        'manufacturer',
         result.meta.totalItems,
       ),
       result,
-      result.meta,
     );
   }
 
@@ -539,7 +538,6 @@ export class ManufacturerController {
         paginatedData.meta?.totalItems,
       ),
       paginatedData,
-      paginatedData.meta,
     );
   }
 
@@ -590,7 +588,6 @@ export class ManufacturerController {
         paginatedData.meta?.totalItems,
       ),
       paginatedData,
-      paginatedData.meta,
     );
   }
 
@@ -692,7 +689,6 @@ export class ManufacturerController {
         result.meta.totalItems,
       ),
       result,
-      result.meta,
     );
   }
 }

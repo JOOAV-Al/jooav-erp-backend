@@ -28,6 +28,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<
           'data' in data
         ) {
           // If it's already our custom format, convert it to BaseResponse
+          // Use the meta from SuccessResponse if available
           return new BaseResponse(
             data.message,
             data.data,
