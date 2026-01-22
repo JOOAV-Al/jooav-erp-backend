@@ -48,6 +48,8 @@ import { ResponseInterceptor } from '../../common/interceptors/response.intercep
 import { AuditLog } from '../../common/decorators/audit-log.decorator';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
 import { BaseResponse } from '../../common/dto/base-response.dto';
+import { SuccessResponse } from '../../common/dto/api-response.dto';
+import { ResponseMessages } from '../../common/utils/response-messages.util';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '../../common/enums';
 
@@ -110,9 +112,13 @@ export class BrandController {
   async create(
     @Body() createBrandDto: CreateBrandDto,
     @CurrentUserId() userId: string,
-    @UploadedFile() logoFile?: Express.Multer.File,
-  ) {
-    return this.brandService.create(createBrandDto, userId, logoFile);
+    @UploadedFile() logo?: Express.Multer.File,
+  ): Promise<SuccessResponse<BrandResponseDto>> {
+    const brand = await this.brandService.create(createBrandDto, userId, logo);
+    return new SuccessResponse(
+      ResponseMessages.created('Brand', brand.name),
+      brand,
+    );
   }
 
   @Get()
@@ -127,14 +133,16 @@ export class BrandController {
   })
   async findAll(
     @Query() query: BrandQueryDto,
-  ): Promise<PaginatedResponse<BrandResponseDto>> {
-    const includesDto = {
-      includeManufacturer: query.includeManufacturer,
-      includeProducts: query.includeProducts,
-      includeAuditInfo: query.includeAuditInfo,
-    };
-
-    return this.brandService.findAll(query, includesDto);
+  ): Promise<SuccessResponse<PaginatedResponse<BrandResponseDto>>> {
+    const result = await this.brandService.findAll(query);
+    return new SuccessResponse(
+      ResponseMessages.foundItems(
+        result.data.length,
+        'brand',
+        result.meta.totalItems,
+      ),
+      result,
+    );
   }
 
   @Get('stats')
@@ -147,8 +155,9 @@ export class BrandController {
     description: 'Brand statistics retrieved successfully',
     type: BrandStatsDto,
   })
-  async getStats(): Promise<BrandStatsDto> {
-    return this.brandService.getStats();
+  async getStats(): Promise<SuccessResponse<BrandStatsDto>> {
+    const stats = await this.brandService.getStats();
+    return new SuccessResponse(ResponseMessages.statsRetrieved('Brand'), stats);
   }
 
   @Get('deleted')
@@ -161,14 +170,24 @@ export class BrandController {
     description: 'Deleted brands retrieved successfully',
   })
   async getDeletedBrands(@Query() query: BrandQueryDto): Promise<
-    PaginatedResponse<
-      BrandResponseDto & {
-        deletedAt: Date;
-        deletedBy: { id: string; email: string; name: string };
-      }
+    SuccessResponse<
+      PaginatedResponse<
+        BrandResponseDto & {
+          deletedAt: Date;
+          deletedBy: { id: string; email: string; name: string };
+        }
+      >
     >
   > {
-    return this.brandService.getDeletedBrands(query);
+    const result = await this.brandService.getDeletedBrands(query);
+    return new SuccessResponse(
+      ResponseMessages.foundItems(
+        result.data.length,
+        'deleted brand',
+        result.meta.totalItems,
+      ),
+      result,
+    );
   }
 
   @Get('manufacturer/:manufacturerId')
@@ -183,8 +202,20 @@ export class BrandController {
   async getByManufacturer(
     @Param('manufacturerId') manufacturerId: string,
     @Query() query: BrandQueryDto,
-  ): Promise<PaginatedResponse<BrandResponseDto>> {
-    return this.brandService.getByManufacturer(manufacturerId, query);
+  ): Promise<SuccessResponse<PaginatedResponse<BrandResponseDto>>> {
+    const result = await this.brandService.getByManufacturer(
+      manufacturerId,
+      query,
+    );
+    return new SuccessResponse(
+      ResponseMessages.foundItems(
+        result.data.length,
+        'brand',
+        result.meta.totalItems,
+      ),
+      result,
+      result.meta,
+    );
   }
 
   @Get(':id')
@@ -201,14 +232,18 @@ export class BrandController {
     @Query('includeManufacturer') includeManufacturer?: boolean,
     @Query('includeProducts') includeProducts?: boolean,
     @Query('includeAuditInfo') includeAuditInfo?: boolean,
-  ): Promise<BrandResponseDto> {
+  ): Promise<SuccessResponse<BrandResponseDto>> {
     const includesDto = {
       includeManufacturer,
       includeProducts,
       includeAuditInfo,
     };
 
-    return this.brandService.findOne(id, includesDto);
+    const brand = await this.brandService.findOne(id, includesDto);
+    return new SuccessResponse(
+      ResponseMessages.retrieved('Brand', brand.name),
+      brand,
+    );
   }
 
   @Patch(':id')
@@ -265,8 +300,17 @@ export class BrandController {
     @Body() updateBrandDto: UpdateBrandDto,
     @CurrentUserId() userId: string,
     @UploadedFile() logoFile?: Express.Multer.File,
-  ): Promise<BrandResponseDto> {
-    return this.brandService.update(id, updateBrandDto, userId, logoFile);
+  ): Promise<SuccessResponse<BrandResponseDto>> {
+    const brand = await this.brandService.update(
+      id,
+      updateBrandDto,
+      userId,
+      logoFile,
+    );
+    return new SuccessResponse(
+      ResponseMessages.updated('Brand', brand.name),
+      brand,
+    );
   }
 
   @Patch(':id/status')
@@ -305,8 +349,20 @@ export class BrandController {
     @Param('id') id: string,
     @Body() updateStatusDto: UpdateBrandStatusDto,
     @CurrentUserId() userId: string,
-  ): Promise<BrandResponseDto> {
-    return this.brandService.updateStatus(id, updateStatusDto.status, userId);
+  ): Promise<SuccessResponse<BrandResponseDto>> {
+    const brand = await this.brandService.updateStatus(
+      id,
+      updateStatusDto.status,
+      userId,
+    );
+    return new SuccessResponse(
+      ResponseMessages.statusChanged(
+        'Brand',
+        brand.name,
+        updateStatusDto.status.toLowerCase(),
+      ),
+      brand,
+    );
   }
 
   @Put(':id/logo')
@@ -342,11 +398,15 @@ export class BrandController {
     @Param('id') id: string,
     @UploadedFile() logoFile: Express.Multer.File,
     @CurrentUserId() userId: string,
-  ): Promise<BrandResponseDto> {
+  ): Promise<SuccessResponse<BrandResponseDto>> {
     if (!logoFile) {
       throw new BadRequestException('Logo file is required');
     }
-    return this.brandService.updateLogo(id, logoFile, userId);
+    const brand = await this.brandService.updateLogo(id, logoFile, userId);
+    return new SuccessResponse(
+      ResponseMessages.updated('Brand logo', brand.name),
+      brand,
+    );
   }
 
   @Delete(':id/logo')
@@ -364,8 +424,12 @@ export class BrandController {
   async deleteLogo(
     @Param('id') id: string,
     @CurrentUserId() userId: string,
-  ): Promise<BrandResponseDto> {
-    return this.brandService.deleteLogo(id, userId);
+  ): Promise<SuccessResponse<BrandResponseDto>> {
+    const brand = await this.brandService.deleteLogo(id, userId);
+    return new SuccessResponse(
+      ResponseMessages.deleted('Brand logo', brand.name),
+      brand,
+    );
   }
 
   @Delete(':id')
@@ -383,7 +447,11 @@ export class BrandController {
   async remove(
     @Param('id') id: string,
     @CurrentUserId() userId: string,
-  ): Promise<{ message: string }> {
-    return this.brandService.remove(id, userId);
+  ): Promise<SuccessResponse<null>> {
+    const { brandName } = await this.brandService.remove(id, userId);
+    return new SuccessResponse(
+      ResponseMessages.deleted('Brand', brandName),
+      null,
+    );
   }
 }

@@ -7,6 +7,10 @@ import {
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  SortByOptions,
+  SortOrderOptions,
+} from 'src/shared/constants/app.constants';
 
 export class VariantQueryDto {
   @ApiPropertyOptional({
@@ -56,7 +60,7 @@ export class VariantQueryDto {
     required: false,
   })
   @IsOptional()
-  @IsEnum(['name', 'createdAt', 'updatedAt'])
+  @IsEnum(SortByOptions)
   sortBy?: 'name' | 'createdAt' | 'updatedAt';
 
   @ApiPropertyOptional({
@@ -66,7 +70,7 @@ export class VariantQueryDto {
     required: false,
   })
   @IsOptional()
-  @IsString()
+  @IsEnum(SortOrderOptions)
   sortOrder?: 'asc' | 'desc';
 
   @ApiPropertyOptional({

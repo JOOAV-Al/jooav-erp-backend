@@ -45,8 +45,22 @@ export class BaseResponse<T = any> {
   ) {
     this.status = status;
     this.message = message;
-    this.data = data;
-    this.meta = meta;
+
+    // Handle paginated data structure - flatten it if it has nested data
+    if (
+      data &&
+      typeof data === 'object' &&
+      'data' in data &&
+      'meta' in data &&
+      !meta // Only flatten if meta wasn't explicitly passed
+    ) {
+      this.data = (data as any).data;
+      this.meta = (data as any).meta;
+    } else {
+      this.data = data;
+      this.meta = meta;
+    }
+
     this.timestamp = new Date().toISOString();
   }
 }

@@ -27,6 +27,8 @@ import { CategoryResponseDto } from './dto/category-response.dto';
 import { BulkCategoryOperationDto } from './dto/bulk-category-operation.dto';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
 import { BaseResponse } from '../../common/dto/base-response.dto';
+import { SuccessResponse } from '../../common/dto/api-response.dto';
+import { ResponseMessages } from '../../common/utils/response-messages.util';
 import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 import { CurrentUserId } from '../../common/decorators/current-user.decorator';
 import { AuditLog } from '../../common/decorators/audit-log.decorator';
@@ -57,8 +59,15 @@ export class CategoryController {
   async create(
     @Body() createCategoryDto: CreateCategoryDto,
     @CurrentUserId() userId: string,
-  ): Promise<CategoryResponseDto> {
-    return this.categoryService.create(createCategoryDto, userId);
+  ): Promise<SuccessResponse<CategoryResponseDto>> {
+    const category = await this.categoryService.create(
+      createCategoryDto,
+      userId,
+    );
+    return new SuccessResponse(
+      ResponseMessages.created('Category', category.name),
+      category,
+    );
   }
 
   @Get()
@@ -105,9 +114,17 @@ export class CategoryController {
     description: 'Include subcategories (e.g., Soft Drinks under Beverages)',
   })
   async findAll(
-    @Query() query: CategoryQueryDto,
-  ): Promise<PaginatedResponse<CategoryResponseDto>> {
-    return this.categoryService.findAll(query);
+    @Query() queryDto: CategoryQueryDto,
+  ): Promise<SuccessResponse<PaginatedResponse<CategoryResponseDto>>> {
+    const result = await this.categoryService.findAll(queryDto);
+    return new SuccessResponse(
+      ResponseMessages.foundItems(
+        result.data.length,
+        'category',
+        result.meta.totalItems,
+      ),
+      result,
+    );
   }
 
   @Get('tree')
@@ -125,8 +142,9 @@ export class CategoryController {
     description: 'FMCG category hierarchy retrieved successfully',
     type: [CategoryResponseDto],
   })
-  async getTree(): Promise<CategoryResponseDto[]> {
-    return this.categoryService.getCategoryTree();
+  async getTree(): Promise<SuccessResponse<CategoryResponseDto[]>> {
+    const tree = await this.categoryService.getCategoryTree();
+    return new SuccessResponse('Category tree retrieved successfully', tree);
   }
 
   @Get('subcategories')
@@ -163,9 +181,17 @@ export class CategoryController {
     description: 'Include product count per subcategory',
   })
   async getSubcategories(
-    @Query() query: CategoryQueryDto,
-  ): Promise<PaginatedResponse<CategoryResponseDto>> {
-    return this.categoryService.getSubcategories(query);
+    @Query() queryDto: CategoryQueryDto,
+  ): Promise<SuccessResponse<PaginatedResponse<CategoryResponseDto>>> {
+    const result = await this.categoryService.getSubcategories(queryDto);
+    return new SuccessResponse(
+      ResponseMessages.foundItems(
+        result.data.length,
+        'subcategory',
+        result.meta.totalItems,
+      ),
+      result,
+    );
   }
 
   @Get(':id')
@@ -185,8 +211,12 @@ export class CategoryController {
   async findOne(
     @Param('id') id: string,
     @Query('includeChildren') includeChildren?: boolean,
-  ): Promise<CategoryResponseDto> {
-    return this.categoryService.findOne(id, includeChildren);
+  ): Promise<SuccessResponse<CategoryResponseDto>> {
+    const category = await this.categoryService.findOne(id, includeChildren);
+    return new SuccessResponse(
+      ResponseMessages.retrieved('Category', category.name),
+      category,
+    );
   }
 
   @Patch(':id')
@@ -207,8 +237,16 @@ export class CategoryController {
     @Param('id') id: string,
     @Body() updateCategoryDto: UpdateCategoryDto,
     @CurrentUserId() userId: string,
-  ): Promise<CategoryResponseDto> {
-    return this.categoryService.update(id, updateCategoryDto, userId);
+  ): Promise<SuccessResponse<CategoryResponseDto>> {
+    const category = await this.categoryService.update(
+      id,
+      updateCategoryDto,
+      userId,
+    );
+    return new SuccessResponse(
+      ResponseMessages.updated('Category', category.name),
+      category,
+    );
   }
 
   @Patch(':id/activate')
@@ -223,8 +261,12 @@ export class CategoryController {
   async activate(
     @Param('id') id: string,
     @CurrentUserId() userId: string,
-  ): Promise<void> {
-    await this.categoryService.activate(id, userId);
+  ): Promise<SuccessResponse<CategoryResponseDto>> {
+    const category = await this.categoryService.activate(id, userId);
+    return new SuccessResponse(
+      ResponseMessages.activated('Category', category.name),
+      category,
+    );
   }
 
   @Patch(':id/deactivate')
@@ -242,8 +284,12 @@ export class CategoryController {
   async deactivate(
     @Param('id') id: string,
     @CurrentUserId() userId: string,
-  ): Promise<void> {
-    await this.categoryService.deactivate(id, userId);
+  ): Promise<SuccessResponse<CategoryResponseDto>> {
+    const category = await this.categoryService.deactivate(id, userId);
+    return new SuccessResponse(
+      ResponseMessages.deactivated('Category', category.name),
+      category,
+    );
   }
 
   @Delete(':id')
@@ -262,8 +308,12 @@ export class CategoryController {
   async remove(
     @Param('id') id: string,
     @CurrentUserId() userId: string,
-  ): Promise<void> {
-    await this.categoryService.remove(id, userId);
+  ): Promise<SuccessResponse<null>> {
+    const result = await this.categoryService.remove(id, userId);
+    return new SuccessResponse(
+      ResponseMessages.deleted('Category', result.categoryName),
+      null,
+    );
   }
 
   @Post('bulk-activate')
@@ -289,10 +339,19 @@ export class CategoryController {
   async bulkActivate(
     @Body() bulkOperationDto: BulkCategoryOperationDto,
     @CurrentUserId() userId: string,
-  ): Promise<{ updatedCount: number }> {
-    return this.categoryService.bulkActivate(
+  ): Promise<SuccessResponse<{ updatedCount: number }>> {
+    const result = await this.categoryService.bulkActivate(
       bulkOperationDto.categoryIds,
       userId,
+    );
+    return new SuccessResponse(
+      ResponseMessages.bulkOperation(
+        'activated',
+        result.updatedCount,
+        'category',
+        'categories',
+      ),
+      result,
     );
   }
 
@@ -319,10 +378,19 @@ export class CategoryController {
   async bulkDeactivate(
     @Body() bulkOperationDto: BulkCategoryOperationDto,
     @CurrentUserId() userId: string,
-  ): Promise<{ updatedCount: number }> {
-    return this.categoryService.bulkDeactivate(
+  ): Promise<SuccessResponse<{ updatedCount: number }>> {
+    const result = await this.categoryService.bulkDeactivate(
       bulkOperationDto.categoryIds,
       userId,
+    );
+    return new SuccessResponse(
+      ResponseMessages.bulkOperation(
+        'deactivated',
+        result.updatedCount,
+        'category',
+        'categories',
+      ),
+      result,
     );
   }
 }
