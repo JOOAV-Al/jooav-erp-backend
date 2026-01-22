@@ -40,7 +40,7 @@ import {
   UpdateAdminPermissionsDto,
 } from './dto/user.dto';
 import { UserProfileDto } from '../auth/dto/auth-response.dto';
-import { PaginationDto } from 'src/common/dto';
+import { PaginationDto } from '../../common/dto';
 
 @ApiTags('Users')
 @Controller('users')
