@@ -6,7 +6,7 @@ import { PaginationDto } from '../../../common/dto/pagination.dto';
 import {
   SortByOptions,
   SortOrderOptions,
-} from 'src/shared/constants/app.constants';
+} from '../../../shared/constants/app.constants';
 
 export class BrandQueryDto extends PaginationDto {
   @ApiPropertyOptional({
