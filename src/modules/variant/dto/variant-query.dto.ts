@@ -10,7 +10,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   SortByOptions,
   SortOrderOptions,
-} from 'src/shared/constants/app.constants';
+} from '../../../shared/constants/app.constants';
 
 export class VariantQueryDto {
   @ApiPropertyOptional({
