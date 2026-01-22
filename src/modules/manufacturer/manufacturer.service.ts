@@ -409,7 +409,7 @@ export class ManufacturerService {
     id: string,
     adminId: string,
     request: any,
-  ): Promise<{ message: string }> {
+  ): Promise<{ message: string; manufacturerName: string }> {
     const manufacturer = await this.prisma.manufacturer.findUnique({
       where: { id },
       include: {
@@ -454,7 +454,10 @@ export class ManufacturerService {
       metadata: { manufacturerName: manufacturer.name },
     });
 
-    return { message: 'Manufacturer successfully deleted' };
+    return {
+      message: 'Manufacturer successfully deleted',
+      manufacturerName: manufacturer.name,
+    };
   }
 
   /**
@@ -520,7 +523,7 @@ export class ManufacturerService {
   async getManufacturerProducts(
     manufacturerId: string,
     paginationDto: PaginationDto,
-  ): Promise<PaginatedResponse<any>> {
+  ): Promise<PaginatedResponse<any> & { manufacturerName: string }> {
     const { page = 1, limit = 10 } = paginationDto;
     const skip = (page - 1) * limit;
 
@@ -550,6 +553,7 @@ export class ManufacturerService {
 
     return {
       data: products,
+      manufacturerName: manufacturer.name,
       meta: {
         page,
         limit,
@@ -558,7 +562,7 @@ export class ManufacturerService {
         hasNextPage: page < Math.ceil(totalCount / limit),
         hasPreviousPage: page > 1,
       },
-    };
+    } as PaginatedResponse<any> & { manufacturerName: string };
   }
 
   /**
@@ -567,7 +571,7 @@ export class ManufacturerService {
   async getManufacturerOrders(
     manufacturerId: string,
     paginationDto: PaginationDto,
-  ): Promise<PaginatedResponse<any>> {
+  ): Promise<PaginatedResponse<any> & { manufacturerName: string }> {
     const { page = 1, limit = 10 } = paginationDto;
     const skip = (page - 1) * limit;
 
@@ -619,6 +623,7 @@ export class ManufacturerService {
 
     return {
       data: orders,
+      manufacturerName: manufacturer.name,
       meta: {
         page,
         limit,
@@ -627,7 +632,7 @@ export class ManufacturerService {
         hasNextPage: page < Math.ceil(totalCount / limit),
         hasPreviousPage: page > 1,
       },
-    };
+    } as PaginatedResponse<any> & { manufacturerName: string };
   }
 
   /**

@@ -365,7 +365,7 @@ export class CategoryService {
   /**
    * Soft delete category
    */
-  async remove(id: string, userId: string): Promise<void> {
+  async remove(id: string, userId: string): Promise<{ categoryName: string }> {
     const category = await this.findOne(id, true);
 
     // Check if category has active children
@@ -395,12 +395,14 @@ export class CategoryService {
 
     // Invalidate category caches
     await this.cacheInvalidationService.invalidateCategory(id);
+
+    return { categoryName: category.name };
   }
 
   /**
    * Activate a category
    */
-  async activate(id: string, userId: string): Promise<void> {
+  async activate(id: string, userId: string): Promise<CategoryResponseDto> {
     const category = await this.prisma.category.findFirst({
       where: { id, deletedAt: null },
     });
@@ -413,7 +415,7 @@ export class CategoryService {
       throw new ConflictException('Category is already active');
     }
 
-    await this.prisma.category.update({
+    const updatedCategory = await this.prisma.category.update({
       where: { id },
       data: {
         isActive: true,
@@ -423,12 +425,17 @@ export class CategoryService {
 
     // Invalidate category caches
     await this.cacheInvalidationService.invalidateCategory(id);
+
+    return updatedCategory;
   }
 
   /**
    * Deactivate a category
    */
-  async deactivate(id: string, userId: string): Promise<void> {
+  /**
+   * Deactivate a category
+   */
+  async deactivate(id: string, userId: string): Promise<CategoryResponseDto> {
     const category = await this.prisma.category.findFirst({
       where: { id, deletedAt: null },
     });
@@ -441,7 +448,7 @@ export class CategoryService {
       throw new ConflictException('Category is already inactive');
     }
 
-    await this.prisma.category.update({
+    const updatedCategory = await this.prisma.category.update({
       where: { id },
       data: {
         isActive: false,
@@ -451,6 +458,8 @@ export class CategoryService {
 
     // Invalidate category caches
     await this.cacheInvalidationService.invalidateCategory(id);
+
+    return updatedCategory;
   }
 
   /**

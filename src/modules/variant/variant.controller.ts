@@ -32,6 +32,8 @@ import { CurrentUserId } from '../../common/decorators/current-user.decorator';
 import { ResponseInterceptor } from '../../common/interceptors/response.interceptor';
 import { AuditLog } from '../../common/decorators/audit-log.decorator';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
+import { SuccessResponse } from '../../common/dto/api-response.dto';
+import { ResponseMessages } from '../../common/utils/response-messages.util';
 import { BaseResponse } from '../../common/dto/base-response.dto';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { UserRole } from '../../common/enums';
@@ -60,8 +62,12 @@ export class VariantController {
   async create(
     @Body() createVariantDto: CreateVariantDto,
     @CurrentUserId() userId: string,
-  ): Promise<VariantResponseDto> {
-    return this.variantService.create(createVariantDto, userId);
+  ): Promise<SuccessResponse<VariantResponseDto>> {
+    const variant = await this.variantService.create(createVariantDto, userId);
+    return new SuccessResponse(
+      ResponseMessages.created('Variant', variant.name),
+      variant,
+    );
   }
 
   @Get()
@@ -76,15 +82,16 @@ export class VariantController {
   })
   async findAll(
     @Query() query: VariantQueryDto,
-  ): Promise<PaginatedResponse<VariantResponseDto>> {
-    const includesDto = {
-      includeBrand:
-        query.includeBrand !== undefined ? query.includeBrand : true, // Default to true
-      includeProductsCount: query.includeProductsCount,
-      includeAuditInfo: query.includeAuditInfo,
-    };
-
-    return this.variantService.findAll(query, includesDto);
+  ): Promise<SuccessResponse<PaginatedResponse<VariantResponseDto>>> {
+    const result = await this.variantService.findAll(query);
+    return new SuccessResponse(
+      ResponseMessages.foundItems(
+        result.data.length,
+        'variant',
+        result.meta.totalItems,
+      ),
+      result,
+    );
   }
 
   @Get('stats')
@@ -97,8 +104,12 @@ export class VariantController {
     description: 'Variant statistics retrieved successfully',
     type: VariantStatsDto,
   })
-  async getStats(): Promise<VariantStatsDto> {
-    return this.variantService.getStats();
+  async getStats(): Promise<SuccessResponse<VariantStatsDto>> {
+    const stats = await this.variantService.getStats();
+    return new SuccessResponse(
+      ResponseMessages.statsRetrieved('Variant'),
+      stats,
+    );
   }
 
   @Get(':id')
@@ -114,14 +125,18 @@ export class VariantController {
     @Query('includeBrand') includeBrand?: boolean,
     @Query('includeProductsCount') includeProductsCount?: boolean,
     @Query('includeAuditInfo') includeAuditInfo?: boolean,
-  ): Promise<VariantResponseDto> {
+  ): Promise<SuccessResponse<VariantResponseDto>> {
     const includesDto = {
       includeBrand: includeBrand !== undefined ? includeBrand : true, // Default to true
       includeProductsCount,
       includeAuditInfo,
     };
 
-    return this.variantService.findOne(id, includesDto);
+    const variant = await this.variantService.findOne(id, includesDto);
+    return new SuccessResponse(
+      ResponseMessages.retrieved('Variant', variant.name),
+      variant,
+    );
   }
 
   @Patch(':id')
@@ -142,8 +157,16 @@ export class VariantController {
     @Param('id') id: string,
     @Body() updateVariantDto: UpdateVariantDto,
     @CurrentUserId() userId: string,
-  ): Promise<VariantResponseDto> {
-    return this.variantService.update(id, updateVariantDto, userId);
+  ): Promise<SuccessResponse<VariantResponseDto>> {
+    const variant = await this.variantService.update(
+      id,
+      updateVariantDto,
+      userId,
+    );
+    return new SuccessResponse(
+      ResponseMessages.updated('Variant', variant.name),
+      variant,
+    );
   }
 
   @Delete(':id')
@@ -163,7 +186,11 @@ export class VariantController {
   async remove(
     @Param('id') id: string,
     @CurrentUserId() userId: string,
-  ): Promise<{ message: string }> {
-    return this.variantService.remove(id, userId);
+  ): Promise<SuccessResponse<null>> {
+    await this.variantService.remove(id, userId);
+    return new SuccessResponse(
+      ResponseMessages.deleted('Variant', 'item'),
+      null,
+    );
   }
 }
