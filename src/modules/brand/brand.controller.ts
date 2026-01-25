@@ -37,6 +37,8 @@ import {
   BrandQueryDto,
   BrandResponseDto,
   BrandStatsDto,
+  BulkBrandOperationDto,
+  BulkBrandOperationResultDto,
 } from './dto';
 import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -51,7 +53,7 @@ import { BaseResponse } from '../../common/dto/base-response.dto';
 import { SuccessResponse } from '../../common/dto/api-response.dto';
 import { ResponseMessages } from '../../common/utils/response-messages.util';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { UserRole } from '../../common/enums';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Brands')
 @Controller('brands')
@@ -133,8 +135,17 @@ export class BrandController {
   })
   async findAll(
     @Query() query: BrandQueryDto,
+    @Query('includeManufacturer') includeManufacturer?: boolean,
+    @Query('includeProducts') includeProducts?: boolean,
+    @Query('includeAuditInfo') includeAuditInfo?: boolean,
   ): Promise<SuccessResponse<PaginatedResponse<BrandResponseDto>>> {
-    const result = await this.brandService.findAll(query);
+    const includesDto = {
+      includeManufacturer: includeManufacturer !== false, // Default to true
+      includeProducts,
+      includeAuditInfo,
+    };
+
+    const result = await this.brandService.findAll(query, includesDto);
     return new SuccessResponse(
       ResponseMessages.foundItems(
         result.data.length,
@@ -453,5 +464,39 @@ export class BrandController {
       ResponseMessages.deleted('Brand', brandName),
       null,
     );
+  }
+
+  @Post('bulk-delete')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Bulk delete brands (Admin only)',
+    description: 'Soft delete multiple brands by setting deletedAt timestamp.',
+  })
+  @ApiBody({ type: BulkBrandOperationDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Bulk delete operation completed',
+    type: BulkBrandOperationResultDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @AuditLog({ action: 'BULK_DELETE', resource: 'Brand' })
+  async bulkDelete(
+    @Body() bulkOperationDto: BulkBrandOperationDto,
+    @CurrentUserId() userId: string,
+  ): Promise<SuccessResponse<BulkBrandOperationResultDto>> {
+    const result = await this.brandService.bulkDelete(
+      bulkOperationDto.brandIds,
+      userId,
+    );
+
+    const message =
+      result.deletedCount > 0
+        ? ResponseMessages.bulkDeleted(result.deletedCount, 'brand')
+        : 'No brands were deleted';
+
+    return new SuccessResponse(message, result);
   }
 }

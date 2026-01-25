@@ -563,6 +563,94 @@ export class BrandService {
     };
   }
 
+  /**
+   * Bulk soft delete brands
+   */
+  async bulkDelete(
+    brandIds: string[],
+    userId: string,
+  ): Promise<{
+    deletedCount: number;
+    deletedBrands: Array<{ brandName: string; manufacturerName: string }>;
+    failedDeletions: Array<{ name: string; reason: string }>;
+  }> {
+    const brands = await this.prisma.brand.findMany({
+      where: {
+        id: { in: brandIds },
+        deletedAt: null,
+      },
+      include: {
+        manufacturer: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    const deletedBrands: Array<{
+      brandName: string;
+      manufacturerName: string;
+    }> = [];
+    const failedDeletions: Array<{ name: string; reason: string }> = [];
+
+    // Process each brand
+    for (const brand of brands) {
+      try {
+        // Soft delete the brand
+        await this.prisma.brand.update({
+          where: { id: brand.id },
+          data: {
+            deletedAt: new Date(),
+            deletedBy: userId,
+          },
+        });
+
+        // Log audit trail for each deletion
+        await this.auditService.createAuditLog({
+          action: 'DELETE',
+          resource: 'Brand',
+          resourceId: brand.id,
+          userId,
+          metadata: {
+            brandName: brand.name,
+            bulkOperation: true,
+          },
+        });
+
+        // Invalidate brand cache
+        await this.cacheInvalidationService.invalidateBrand(brand.id);
+
+        deletedBrands.push({
+          brandName: brand.name,
+          manufacturerName: brand.manufacturer.name,
+        });
+      } catch (error) {
+        failedDeletions.push({
+          name: brand.name,
+          reason: `Failed to delete brand: ${error.message}`,
+        });
+      }
+    }
+
+    // Handle case where some IDs don't exist
+    const foundIds = brands.map((b) => b.id);
+    const notFoundIds = brandIds.filter((id) => !foundIds.includes(id));
+
+    for (const id of notFoundIds) {
+      failedDeletions.push({
+        name: `Brand ID: ${id}`,
+        reason: 'Brand not found or already deleted',
+      });
+    }
+
+    return {
+      deletedCount: deletedBrands.length,
+      deletedBrands,
+      failedDeletions,
+    };
+  }
+
   async deleteLogo(id: string, userId: string): Promise<BrandResponseDto> {
     const existingBrand = await this.findOne(id);
 
