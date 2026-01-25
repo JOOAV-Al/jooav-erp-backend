@@ -27,6 +27,7 @@ import { ManufacturerService } from './manufacturer.service';
 import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { AuditLog } from '../../common/decorators/audit-log.decorator';
 import {
   CurrentUser,
   CurrentUserId,
@@ -45,6 +46,10 @@ import {
   ManufacturerResponseDto,
   ManufacturerStatsDto,
 } from './dto/manufacturer-response.dto';
+import {
+  BulkManufacturerOperationDto,
+  BulkOperationResultDto,
+} from './dto/bulk-manufacturer-operation.dto';
 
 @ApiTags('Manufacturers')
 @Controller('manufacturers')
@@ -362,6 +367,43 @@ export class ManufacturerController {
       ResponseMessages.deleted('Manufacturer', manufacturerName),
       null,
     );
+  }
+
+  @Post('bulk-delete')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Bulk delete manufacturers (Admin only)',
+    description:
+      'Soft delete multiple manufacturers by setting their status to SUSPENDED. Will skip manufacturers with active products.',
+  })
+  @ApiBody({ type: BulkManufacturerOperationDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Bulk delete operation completed',
+    type: BulkOperationResultDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  @AuditLog({ action: 'BULK_DELETE', resource: 'Manufacturer' })
+  async bulkDelete(
+    @Body() bulkOperationDto: BulkManufacturerOperationDto,
+    @CurrentUserId() adminId: string,
+    @Request() req: any,
+  ): Promise<SuccessResponse<BulkOperationResultDto>> {
+    const result = await this.manufacturerService.bulkDelete(
+      bulkOperationDto.manufacturerIds,
+      adminId,
+      req,
+    );
+
+    const message =
+      result.deletedCount > 0
+        ? ResponseMessages.bulkDeleted(result.deletedCount, 'manufacturer')
+        : 'No manufacturers were deleted';
+
+    return new SuccessResponse(message, result);
   }
 
   // ================================
