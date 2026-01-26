@@ -43,12 +43,12 @@ export class VariantService {
       throw new BadRequestException('Brand not found');
     }
 
-    // Check if variant name already exists for this brand
+    // Check if variant name already exists for this brand among active records
     const existingVariant = await this.prisma.variant.findFirst({
       where: {
         name: { equals: name, mode: 'insensitive' },
         brandId,
-        deletedAt: null,
+        deletedAt: null, // Only check active variants
       },
     });
 
@@ -266,13 +266,13 @@ export class VariantService {
       throw new NotFoundException('Variant not found');
     }
 
-    // If name is being updated, check for duplicates
+    // If name is being updated, check for duplicates among active records
     if (name && name !== existingVariant.name) {
       const duplicateVariant = await this.prisma.variant.findFirst({
         where: {
           name: { equals: name, mode: 'insensitive' },
           brandId: brandId || existingVariant.brandId,
-          deletedAt: null,
+          deletedAt: null, // Only check active variants
           id: { not: id },
         },
       });
