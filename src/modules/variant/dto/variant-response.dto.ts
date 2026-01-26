@@ -9,7 +9,7 @@ export class VariantBrandDto {
 
   @ApiProperty({
     description: 'Brand name',
-    example: '',
+    example: 'Indomie',
   })
   name: string;
 }

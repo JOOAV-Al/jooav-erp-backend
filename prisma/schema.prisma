@@ -165,7 +165,6 @@ model Category {
   updatedByUser   User       @relation("UpdatedCategories", fields: [updatedBy], references: [id])
   deletedByUser   User?      @relation("DeletedCategories", fields: [deletedBy], references: [id])
   
-  @@unique([name, parentId]) // Category name unique within same parent level
   @@map("categories")
 }
 
@@ -190,7 +189,6 @@ model Variant {
   updatedByUser User      @relation("UpdatedVariants", fields: [updatedBy], references: [id])
   deletedByUser User?     @relation("DeletedVariants", fields: [deletedBy], references: [id])
 
-  @@unique([name, brandId]) // Variant name unique per brand
   @@map("variants")
 }
 
@@ -480,7 +478,7 @@ model Region {
 
 model Manufacturer {
   id          String  @id @default(cuid())
-  name        String  @unique
+  name        String
   description String?
 
   // ERP Management
@@ -531,7 +529,6 @@ model Brand {
   updatedByUser User         @relation("UpdatedBrands", fields: [updatedBy], references: [id])
   deletedByUser User?        @relation("DeletedBrands", fields: [deletedBy], references: [id])
 
-  @@unique([name, manufacturerId]) // Brand name unique per manufacturer
   @@map("brands")
 }
 

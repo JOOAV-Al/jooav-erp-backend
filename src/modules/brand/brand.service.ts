@@ -674,29 +674,32 @@ export class BrandService {
   }
 
   async getStats(): Promise<BrandStatsDto> {
-    const [total, active, inactive, recentlyAdded] = await Promise.all([
-      this.prisma.brand.count({ where: { deletedAt: null } }),
-      this.prisma.brand.count({
-        where: { status: BrandStatus.ACTIVE, deletedAt: null },
-      }),
-      this.prisma.brand.count({
-        where: { status: BrandStatus.INACTIVE, deletedAt: null },
-      }),
-      this.prisma.brand.count({
-        where: {
-          deletedAt: null,
-          createdAt: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
+    const [total, active, inactive, recentlyAdded, totalManufacturers] =
+      await Promise.all([
+        this.prisma.brand.count({ where: { deletedAt: null } }),
+        this.prisma.brand.count({
+          where: { status: BrandStatus.ACTIVE, deletedAt: null },
+        }),
+        this.prisma.brand.count({
+          where: { status: BrandStatus.INACTIVE, deletedAt: null },
+        }),
+        this.prisma.brand.count({
+          where: {
+            deletedAt: null,
+            createdAt: {
+              gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
+            },
           },
-        },
-      }),
-    ]);
+        }),
+        this.prisma.manufacturer.count({ where: { deletedAt: null } }),
+      ]);
 
     return {
       total,
       active,
       inactive,
       recentlyAdded,
+      totalManufacturers,
     };
   }
 
