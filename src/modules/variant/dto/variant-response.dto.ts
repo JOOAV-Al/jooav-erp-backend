@@ -143,7 +143,7 @@ export class VariantStatsDto {
 
   @ApiProperty({
     description: 'Variants by brand',
-    example: { 'Indomie': 10, 'Peak': 8, 'Coca-Cola': 5 },
+    example: { Indomie: 10, Peak: 8, 'Coca-Cola': 5 },
   })
   variantsByBrand: Record<string, number>;
 

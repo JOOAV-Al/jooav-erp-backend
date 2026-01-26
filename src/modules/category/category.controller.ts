@@ -24,6 +24,7 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { CategoryQueryDto } from './dto/category-query.dto';
 import { CategoryResponseDto } from './dto/category-response.dto';
+import { CategoryStatsDto } from './dto/category-stats.dto';
 import { BulkCategoryOperationDto } from './dto/bulk-category-operation.dto';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
 import { BaseResponse } from '../../common/dto/base-response.dto';
@@ -145,6 +146,28 @@ export class CategoryController {
   async getTree(): Promise<SuccessResponse<CategoryResponseDto[]>> {
     const tree = await this.categoryService.getCategoryTree();
     return new SuccessResponse('Category tree retrieved successfully', tree);
+  }
+
+  @Get('stats')
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiBearerAuth('admin-access-token')
+  @UseInterceptors(CacheInterceptor)
+  @Cache({
+    key: 'categories_stats',
+    ttl: 600, // 10 minutes - stats can be cached for moderate time
+  })
+  @ApiOperation({
+    summary: 'Get category statistics and analytics',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Category statistics retrieved successfully',
+    type: CategoryStatsDto,
+  })
+  async getStats(): Promise<SuccessResponse<CategoryStatsDto>> {
+    const stats = await this.categoryService.getStats();
+    return new SuccessResponse('Category statistics retrieved successfully', stats);
   }
 
   @Get('subcategories')
