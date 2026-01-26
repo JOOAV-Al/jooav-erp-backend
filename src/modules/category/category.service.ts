@@ -10,6 +10,7 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { CategoryQueryDto } from './dto/category-query.dto';
 import { CategoryResponseDto } from './dto/category-response.dto';
+import { CategoryStatsDto } from './dto/category-stats.dto';
 import { PaginatedResponse } from '../../common/dto/paginated-response.dto';
 import { StringUtils } from '../../common/utils/string.utils';
 
@@ -241,6 +242,36 @@ export class CategoryService {
               slug: true,
               description: true,
               isActive: true,
+              sortOrder: true,
+              createdBy: true,
+              updatedBy: true,
+              createdAt: true,
+              updatedAt: true,
+              children: {
+                where: {
+                  deletedAt: null,
+                  isActive: true,
+                },
+                orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  description: true,
+                  parentId: true,
+                  isActive: true,
+                  sortOrder: true,
+                  createdBy: true,
+                  updatedBy: true,
+                  createdAt: true,
+                  updatedAt: true,
+                  ...(includeProductCount && {
+                    _count: {
+                      select: { products: true },
+                    },
+                  }),
+                },
+              },
             },
           },
           ...(includeProductCount && {
@@ -624,8 +655,96 @@ export class CategoryService {
             updatedBy: category.parent.updatedBy,
             createdAt: category.parent.createdAt,
             updatedAt: category.parent.updatedAt,
+            children: category.parent.children?.map((child: any) =>
+              this.transformToResponseDto(child),
+            ),
           }
         : undefined,
+    };
+  }
+
+  /**
+   * Get category statistics
+   */
+  async getStats(): Promise<CategoryStatsDto> {
+    // Calculate date for this month
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [
+      totalCategories,
+      activeCategories,
+      parentCategories,
+      subcategories,
+      archivedCategories,
+      createdThisMonth,
+      categoriesWithProducts,
+    ] = await Promise.all([
+      // Total categories (including deleted)
+      this.prisma.category.count(),
+
+      // Active categories (not deleted)
+      this.prisma.category.count({
+        where: { deletedAt: null, isActive: true },
+      }),
+
+      // Parent categories (major categories - no parent)
+      this.prisma.category.count({
+        where: { parentId: null, deletedAt: null },
+      }),
+
+      // Subcategories (have a parent)
+      this.prisma.category.count({
+        where: { parentId: { not: null }, deletedAt: null },
+      }),
+
+      // Archived (soft deleted) categories
+      this.prisma.category.count({
+        where: { deletedAt: { not: null } },
+      }),
+
+      // Categories created this month
+      this.prisma.category.count({
+        where: {
+          createdAt: {
+            gte: startOfMonth,
+          },
+          deletedAt: null,
+        },
+      }),
+
+      // Categories with products (if products relation exists)
+      this.prisma.category.count({
+        where: {
+          products: {
+            some: {
+              deletedAt: null,
+            },
+          },
+          deletedAt: null,
+        },
+      }),
+    ]);
+
+    // Calculate average subcategories per parent category
+    const parentCategoriesCount = await this.prisma.category.count({
+      where: { parentId: null, deletedAt: null },
+    });
+
+    const avgSubcategoriesPerParent =
+      parentCategoriesCount > 0
+        ? Math.round((subcategories / parentCategoriesCount) * 100) / 100
+        : 0;
+
+    return {
+      total: totalCategories,
+      active: activeCategories,
+      parents: parentCategories,
+      subcategories,
+      archived: archivedCategories,
+      createdThisMonth,
+      avgSubcategoriesPerParent,
+      categoriesWithProducts,
     };
   }
 }

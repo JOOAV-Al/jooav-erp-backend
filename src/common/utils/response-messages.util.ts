@@ -2,6 +2,24 @@
  * Utility class for generating consistent response messages across the application
  */
 export class ResponseMessages {
+  // Helper method to properly pluralize entity names
+  private static pluralize(entityType: string): string {
+    const entityTypeLower = entityType.toLowerCase();
+
+    // Handle special pluralization cases
+    const specialPlurals: Record<string, string> = {
+      category: 'categories',
+      subcategory: 'subcategories',
+      company: 'companies',
+      entity: 'entities',
+      query: 'queries',
+      city: 'cities',
+      country: 'countries',
+    };
+
+    return specialPlurals[entityTypeLower] || `${entityTypeLower}s`;
+  }
+
   // Generic CRUD operations
   static created(entityType: string, entityName: string): string {
     return `${entityType} '${entityName}' has been created successfully`;
@@ -44,7 +62,7 @@ export class ResponseMessages {
   // List/pagination operations
   static foundItems(count: number, entityType: string, total?: number): string {
     const entityTypeLower = entityType.toLowerCase();
-    const plural = count === 1 ? entityTypeLower : `${entityTypeLower}s`;
+    const plural = count === 1 ? entityTypeLower : this.pluralize(entityType);
 
     if (total !== undefined && total !== count) {
       return `Found ${count} ${plural} out of ${total} total`;
@@ -53,7 +71,7 @@ export class ResponseMessages {
   }
 
   static noItemsFound(entityType: string): string {
-    return `No ${entityType.toLowerCase()}s found`;
+    return `No ${this.pluralize(entityType)} found`;
   }
 
   // Special operations
@@ -80,19 +98,19 @@ export class ResponseMessages {
   // Bulk operations
   static bulkCreated(count: number, entityType: string): string {
     const entityTypeLower = entityType.toLowerCase();
-    const plural = count === 1 ? entityTypeLower : `${entityTypeLower}s`;
+    const plural = count === 1 ? entityTypeLower : this.pluralize(entityType);
     return `${count} ${plural} have been created successfully`;
   }
 
   static bulkUpdated(count: number, entityType: string): string {
     const entityTypeLower = entityType.toLowerCase();
-    const plural = count === 1 ? entityTypeLower : `${entityTypeLower}s`;
+    const plural = count === 1 ? entityTypeLower : this.pluralize(entityType);
     return `${count} ${plural} have been updated successfully`;
   }
 
   static bulkDeleted(count: number, entityType: string): string {
     const entityTypeLower = entityType.toLowerCase();
-    const plural = count === 1 ? entityTypeLower : `${entityTypeLower}s`;
+    const plural = count === 1 ? entityTypeLower : this.pluralize(entityType);
     return `${count} ${plural} have been deleted successfully`;
   }
 
