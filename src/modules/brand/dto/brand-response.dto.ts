@@ -133,4 +133,7 @@ export class BrandStatsDto {
 
   @ApiProperty({ example: 3, description: 'Brands added in last 7 days' })
   recentlyAdded: number;
+
+  @ApiProperty({ example: 25, description: 'Total number of manufacturers' })
+  totalManufacturers: number;
 }
