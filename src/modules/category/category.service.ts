@@ -242,11 +242,36 @@ export class CategoryService {
               slug: true,
               description: true,
               isActive: true,
+              sortOrder: true,
               createdBy: true,
               updatedBy: true,
               createdAt: true,
               updatedAt: true,
-              children: true,
+              children: {
+                where: {
+                  deletedAt: null,
+                  isActive: true,
+                },
+                orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  description: true,
+                  parentId: true,
+                  isActive: true,
+                  sortOrder: true,
+                  createdBy: true,
+                  updatedBy: true,
+                  createdAt: true,
+                  updatedAt: true,
+                  ...(includeProductCount && {
+                    _count: {
+                      select: { products: true },
+                    },
+                  }),
+                },
+              },
             },
           },
           ...(includeProductCount && {
@@ -630,6 +655,9 @@ export class CategoryService {
             updatedBy: category.parent.updatedBy,
             createdAt: category.parent.createdAt,
             updatedAt: category.parent.updatedAt,
+            children: category.parent.children?.map((child: any) =>
+              this.transformToResponseDto(child),
+            ),
           }
         : undefined,
     };
