@@ -242,6 +242,11 @@ export class CategoryService {
               slug: true,
               description: true,
               isActive: true,
+              createdBy: true,
+              updatedBy: true,
+              createdAt: true,
+              updatedAt: true,
+              children: true,
             },
           },
           ...(includeProductCount && {
@@ -649,27 +654,27 @@ export class CategoryService {
     ] = await Promise.all([
       // Total categories (including deleted)
       this.prisma.category.count(),
-      
+
       // Active categories (not deleted)
       this.prisma.category.count({
         where: { deletedAt: null, isActive: true },
       }),
-      
+
       // Parent categories (major categories - no parent)
       this.prisma.category.count({
         where: { parentId: null, deletedAt: null },
       }),
-      
+
       // Subcategories (have a parent)
       this.prisma.category.count({
         where: { parentId: { not: null }, deletedAt: null },
       }),
-      
+
       // Archived (soft deleted) categories
       this.prisma.category.count({
         where: { deletedAt: { not: null } },
       }),
-      
+
       // Categories created this month
       this.prisma.category.count({
         where: {
@@ -679,7 +684,7 @@ export class CategoryService {
           deletedAt: null,
         },
       }),
-      
+
       // Categories with products (if products relation exists)
       this.prisma.category.count({
         where: {
@@ -697,10 +702,11 @@ export class CategoryService {
     const parentCategoriesCount = await this.prisma.category.count({
       where: { parentId: null, deletedAt: null },
     });
-    
-    const avgSubcategoriesPerParent = parentCategoriesCount > 0 
-      ? Math.round((subcategories / parentCategoriesCount) * 100) / 100 
-      : 0;
+
+    const avgSubcategoriesPerParent =
+      parentCategoriesCount > 0
+        ? Math.round((subcategories / parentCategoriesCount) * 100) / 100
+        : 0;
 
     return {
       total: totalCategories,

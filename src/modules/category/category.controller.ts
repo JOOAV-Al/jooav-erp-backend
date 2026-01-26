@@ -167,7 +167,10 @@ export class CategoryController {
   })
   async getStats(): Promise<SuccessResponse<CategoryStatsDto>> {
     const stats = await this.categoryService.getStats();
-    return new SuccessResponse('Category statistics retrieved successfully', stats);
+    return new SuccessResponse(
+      'Category statistics retrieved successfully',
+      stats,
+    );
   }
 
   @Get('subcategories')
@@ -179,7 +182,7 @@ export class CategoryController {
   })
   @ApiOperation({
     summary:
-      'Get all subcategories (categories with parent) - (Accessible to everyone)',
+      'Get all subcategories (categories with parent) - includes parent with all its children - (Accessible to everyone)',
   })
   @ApiResponse({
     status: 200,
