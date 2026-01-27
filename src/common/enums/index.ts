@@ -61,3 +61,10 @@ export enum TaskStatus {
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
 }
+
+export enum ProductStatus {
+  DRAFT = 'DRAFT',
+  QUEUE = 'QUEUE',
+  LIVE = 'LIVE',
+  ARCHIVED = 'ARCHIVED',
+}

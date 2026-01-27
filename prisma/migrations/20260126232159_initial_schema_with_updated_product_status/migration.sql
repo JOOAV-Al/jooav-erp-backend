@@ -1,14 +1,11 @@
 -- CreateEnum
-CREATE TYPE "UserRole" AS ENUM ('SUPER_ADMIN', 'ADMIN', 'SUB_ADMIN', 'SME_USER');
+CREATE TYPE "UserRole" AS ENUM ('SUPER_ADMIN', 'ADMIN', 'PROCUREMENT_OFFICER', 'SME_USER');
 
 -- CreateEnum
 CREATE TYPE "UserStatus" AS ENUM ('ACTIVE', 'SUSPENDED', 'PENDING_APPROVAL', 'DEACTIVATED', 'BLOCKED');
 
 -- CreateEnum
-CREATE TYPE "CustomerStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'SUSPENDED');
-
--- CreateEnum
-CREATE TYPE "ProductStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'DISCONTINUED');
+CREATE TYPE "ProductStatus" AS ENUM ('DRAFT', 'QUEUE', 'LIVE', 'ARCHIVED');
 
 -- CreateEnum
 CREATE TYPE "OrderStatus" AS ENUM ('PLACED', 'ACCEPTED', 'PROCESSING', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED', 'REJECTED');
@@ -32,7 +29,10 @@ CREATE TYPE "TaskStatus" AS ENUM ('TODO', 'IN_PROGRESS', 'REVIEW', 'COMPLETED', 
 CREATE TYPE "Priority" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'URGENT');
 
 -- CreateEnum
-CREATE TYPE "ManufacturerStatus" AS ENUM ('PENDING_APPROVAL', 'ACTIVE', 'SUSPENDED', 'TERMINATED');
+CREATE TYPE "ManufacturerStatus" AS ENUM ('PENDING_APPROVAL', 'ACTIVE', 'SUSPENDED', 'INACTIVE');
+
+-- CreateEnum
+CREATE TYPE "BrandStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'DISCONTINUED');
 
 -- CreateEnum
 CREATE TYPE "SMEVerificationStatus" AS ENUM ('PENDING', 'VERIFIED', 'REJECTED', 'REQUIRES_ADDITIONAL_INFO');
@@ -47,7 +47,7 @@ CREATE TYPE "InventoryMovementType" AS ENUM ('INBOUND', 'OUTBOUND', 'ADJUSTMENT'
 CREATE TYPE "AdminAction" AS ENUM ('LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'TOKEN_REFRESH_FAILED', 'CREATE_MANUFACTURER', 'APPROVE_MANUFACTURER', 'SUSPEND_MANUFACTURER', 'APPROVE_SME', 'REJECT_SME', 'ASSIGN_SUB_ADMIN', 'UPDATE_ORDER_STATUS', 'MANAGE_INVENTORY', 'SYSTEM_CONFIG', 'USER_MANAGEMENT');
 
 -- CreateEnum
-CREATE TYPE "ResourceType" AS ENUM ('MANUFACTURER', 'SME_USER', 'SUB_ADMIN', 'ORDER', 'INVENTORY', 'REGION', 'SYSTEM_CONFIG');
+CREATE TYPE "ResourceType" AS ENUM ('MANUFACTURER', 'SME_USER', 'SUB_ADMIN', 'ORDER', 'INVENTORY', 'REGION', 'SYSTEM_CONFIG', 'ADMIN_AUTH');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -74,13 +74,10 @@ CREATE TABLE "users" (
 CREATE TABLE "user_profiles" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
-    "dateOfBirth" TIMESTAMP(3),
     "address" TEXT,
     "city" TEXT,
     "state" TEXT,
     "country" TEXT,
-    "zipCode" TEXT,
-    "bio" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -101,6 +98,18 @@ CREATE TABLE "user_sessions" (
 );
 
 -- CreateTable
+CREATE TABLE "password_resets" (
+    "id" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "token" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "used" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "password_resets_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "user_activities" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -116,22 +125,38 @@ CREATE TABLE "user_activities" (
 );
 
 -- CreateTable
-CREATE TABLE "customers" (
+CREATE TABLE "categories" (
     "id" TEXT NOT NULL,
-    "companyName" TEXT,
-    "contactName" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
-    "phone" TEXT,
-    "address" TEXT,
-    "city" TEXT,
-    "state" TEXT,
-    "country" TEXT,
-    "zipCode" TEXT,
-    "status" "CustomerStatus" NOT NULL DEFAULT 'ACTIVE',
+    "name" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "description" TEXT,
+    "parentId" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdBy" TEXT NOT NULL,
+    "updatedBy" TEXT NOT NULL,
+    "deletedBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
 
-    CONSTRAINT "customers_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "categories_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "variants" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "brandId" TEXT NOT NULL,
+    "createdBy" TEXT NOT NULL,
+    "updatedBy" TEXT NOT NULL,
+    "deletedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "variants_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -140,17 +165,23 @@ CREATE TABLE "products" (
     "name" TEXT NOT NULL,
     "description" TEXT,
     "sku" TEXT NOT NULL,
-    "barcode" TEXT,
-    "category" TEXT NOT NULL,
-    "price" DECIMAL(10,2) NOT NULL,
-    "costPrice" DECIMAL(10,2),
-    "stock" INTEGER NOT NULL DEFAULT 0,
-    "minStock" INTEGER NOT NULL DEFAULT 0,
-    "maxStock" INTEGER,
-    "status" "ProductStatus" NOT NULL DEFAULT 'ACTIVE',
-    "images" TEXT[],
+    "brandId" TEXT NOT NULL,
+    "variantId" TEXT NOT NULL,
+    "categoryId" TEXT NOT NULL,
+    "manufacturerId" TEXT NOT NULL,
+    "packSize" TEXT NOT NULL,
+    "packagingType" TEXT NOT NULL,
+    "price" DECIMAL(10,2),
+    "discount" DECIMAL(5,2),
+    "images" JSONB[],
+    "thumbnail" TEXT,
+    "status" "ProductStatus" NOT NULL DEFAULT 'QUEUE',
+    "createdBy" TEXT NOT NULL,
+    "updatedBy" TEXT NOT NULL,
+    "deletedBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
 
     CONSTRAINT "products_pkey" PRIMARY KEY ("id")
 );
@@ -159,10 +190,9 @@ CREATE TABLE "products" (
 CREATE TABLE "orders" (
     "id" TEXT NOT NULL,
     "orderNumber" TEXT NOT NULL,
-    "customerId" TEXT,
     "smeUserId" TEXT,
     "manufacturerId" TEXT,
-    "assignedSubAdminId" TEXT,
+    "assignedProcurementOfficerId" TEXT,
     "createdById" TEXT NOT NULL,
     "status" "OrderStatus" NOT NULL DEFAULT 'PLACED',
     "paymentStatus" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
@@ -291,7 +321,7 @@ CREATE TABLE "audit_logs" (
 );
 
 -- CreateTable
-CREATE TABLE "super_admin_profiles" (
+CREATE TABLE "admin_profiles" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "permissions" JSONB,
@@ -299,15 +329,14 @@ CREATE TABLE "super_admin_profiles" (
     "lastActivity" TIMESTAMP(3),
     "loginAttempts" INTEGER NOT NULL DEFAULT 0,
     "accountLockUntil" TIMESTAMP(3),
-    "canManageManufacturers" BOOLEAN NOT NULL DEFAULT true,
-    "canApproveSMEs" BOOLEAN NOT NULL DEFAULT true,
-    "canManageSubAdmins" BOOLEAN NOT NULL DEFAULT true,
-    "canAccessAnalytics" BOOLEAN NOT NULL DEFAULT true,
     "canModifySystemConfig" BOOLEAN NOT NULL DEFAULT false,
+    "canSuspendAdmins" BOOLEAN NOT NULL DEFAULT false,
+    "canChangeUserRoles" BOOLEAN NOT NULL DEFAULT false,
+    "canChangeUserEmails" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "super_admin_profiles_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "admin_profiles_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -327,21 +356,36 @@ CREATE TABLE "regions" (
 -- CreateTable
 CREATE TABLE "manufacturers" (
     "id" TEXT NOT NULL,
-    "companyName" TEXT NOT NULL,
-    "contactEmail" TEXT NOT NULL,
-    "contactPhone" TEXT,
-    "address" TEXT,
-    "regionId" TEXT NOT NULL,
-    "status" "ManufacturerStatus" NOT NULL DEFAULT 'PENDING_APPROVAL',
-    "businessLicense" TEXT,
-    "taxId" TEXT,
-    "products" JSONB[],
-    "partnershipDate" TIMESTAMP(3),
-    "contractUrl" TEXT,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "status" "ManufacturerStatus" NOT NULL DEFAULT 'ACTIVE',
+    "createdBy" TEXT NOT NULL,
+    "updatedBy" TEXT NOT NULL,
+    "deletedBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+    "regionId" TEXT,
 
     CONSTRAINT "manufacturers_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "brands" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "logo" TEXT,
+    "manufacturerId" TEXT NOT NULL,
+    "status" "BrandStatus" NOT NULL DEFAULT 'ACTIVE',
+    "createdBy" TEXT NOT NULL,
+    "updatedBy" TEXT NOT NULL,
+    "deletedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "brands_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -364,7 +408,7 @@ CREATE TABLE "sme_users" (
 );
 
 -- CreateTable
-CREATE TABLE "sub_admin_profiles" (
+CREATE TABLE "procurement_officer_profiles" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "regionId" TEXT,
@@ -376,7 +420,7 @@ CREATE TABLE "sub_admin_profiles" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "sub_admin_profiles_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "procurement_officer_profiles_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -443,13 +487,13 @@ CREATE UNIQUE INDEX "user_profiles_userId_key" ON "user_profiles"("userId");
 CREATE UNIQUE INDEX "user_sessions_token_key" ON "user_sessions"("token");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "customers_email_key" ON "customers"("email");
+CREATE UNIQUE INDEX "password_resets_token_key" ON "password_resets"("token");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "categories_slug_key" ON "categories"("slug");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "products_sku_key" ON "products"("sku");
-
--- CreateIndex
-CREATE UNIQUE INDEX "products_barcode_key" ON "products"("barcode");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "orders_orderNumber_key" ON "orders"("orderNumber");
@@ -464,7 +508,7 @@ CREATE UNIQUE INDEX "payments_transactionId_key" ON "payments"("transactionId");
 CREATE UNIQUE INDEX "system_configs_key_key" ON "system_configs"("key");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "super_admin_profiles_userId_key" ON "super_admin_profiles"("userId");
+CREATE UNIQUE INDEX "admin_profiles_userId_key" ON "admin_profiles"("userId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "regions_name_key" ON "regions"("name");
@@ -473,16 +517,13 @@ CREATE UNIQUE INDEX "regions_name_key" ON "regions"("name");
 CREATE UNIQUE INDEX "regions_code_key" ON "regions"("code");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "manufacturers_contactEmail_key" ON "manufacturers"("contactEmail");
-
--- CreateIndex
 CREATE UNIQUE INDEX "sme_users_userId_key" ON "sme_users"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "sub_admin_profiles_userId_key" ON "sub_admin_profiles"("userId");
+CREATE UNIQUE INDEX "procurement_officer_profiles_userId_key" ON "procurement_officer_profiles"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "sub_admin_profiles_employeeId_key" ON "sub_admin_profiles"("employeeId");
+CREATE UNIQUE INDEX "procurement_officer_profiles_employeeId_key" ON "procurement_officer_profiles"("employeeId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "inventory_smeUserId_productSku_key" ON "inventory"("smeUserId", "productSku");
@@ -497,7 +538,49 @@ ALTER TABLE "user_sessions" ADD CONSTRAINT "user_sessions_userId_fkey" FOREIGN K
 ALTER TABLE "user_activities" ADD CONSTRAINT "user_activities_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "orders" ADD CONSTRAINT "orders_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "customers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "categories" ADD CONSTRAINT "categories_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "categories"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "categories" ADD CONSTRAINT "categories_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "categories" ADD CONSTRAINT "categories_updatedBy_fkey" FOREIGN KEY ("updatedBy") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "categories" ADD CONSTRAINT "categories_deletedBy_fkey" FOREIGN KEY ("deletedBy") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "variants" ADD CONSTRAINT "variants_brandId_fkey" FOREIGN KEY ("brandId") REFERENCES "brands"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "variants" ADD CONSTRAINT "variants_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "variants" ADD CONSTRAINT "variants_updatedBy_fkey" FOREIGN KEY ("updatedBy") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "variants" ADD CONSTRAINT "variants_deletedBy_fkey" FOREIGN KEY ("deletedBy") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "products" ADD CONSTRAINT "products_brandId_fkey" FOREIGN KEY ("brandId") REFERENCES "brands"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "products" ADD CONSTRAINT "products_variantId_fkey" FOREIGN KEY ("variantId") REFERENCES "variants"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "products" ADD CONSTRAINT "products_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "products" ADD CONSTRAINT "products_manufacturerId_fkey" FOREIGN KEY ("manufacturerId") REFERENCES "manufacturers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "products" ADD CONSTRAINT "products_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "products" ADD CONSTRAINT "products_updatedBy_fkey" FOREIGN KEY ("updatedBy") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "products" ADD CONSTRAINT "products_deletedBy_fkey" FOREIGN KEY ("deletedBy") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "orders" ADD CONSTRAINT "orders_smeUserId_fkey" FOREIGN KEY ("smeUserId") REFERENCES "sme_users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -506,7 +589,7 @@ ALTER TABLE "orders" ADD CONSTRAINT "orders_smeUserId_fkey" FOREIGN KEY ("smeUse
 ALTER TABLE "orders" ADD CONSTRAINT "orders_manufacturerId_fkey" FOREIGN KEY ("manufacturerId") REFERENCES "manufacturers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "orders" ADD CONSTRAINT "orders_assignedSubAdminId_fkey" FOREIGN KEY ("assignedSubAdminId") REFERENCES "sub_admin_profiles"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "orders" ADD CONSTRAINT "orders_assignedProcurementOfficerId_fkey" FOREIGN KEY ("assignedProcurementOfficerId") REFERENCES "procurement_officer_profiles"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "orders" ADD CONSTRAINT "orders_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -530,10 +613,31 @@ ALTER TABLE "tasks" ADD CONSTRAINT "tasks_projectId_fkey" FOREIGN KEY ("projectI
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_assignedId_fkey" FOREIGN KEY ("assignedId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "super_admin_profiles" ADD CONSTRAINT "super_admin_profiles_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "admin_profiles" ADD CONSTRAINT "admin_profiles_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "manufacturers" ADD CONSTRAINT "manufacturers_regionId_fkey" FOREIGN KEY ("regionId") REFERENCES "regions"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "manufacturers" ADD CONSTRAINT "manufacturers_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "manufacturers" ADD CONSTRAINT "manufacturers_updatedBy_fkey" FOREIGN KEY ("updatedBy") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "manufacturers" ADD CONSTRAINT "manufacturers_deletedBy_fkey" FOREIGN KEY ("deletedBy") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "manufacturers" ADD CONSTRAINT "manufacturers_regionId_fkey" FOREIGN KEY ("regionId") REFERENCES "regions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "brands" ADD CONSTRAINT "brands_manufacturerId_fkey" FOREIGN KEY ("manufacturerId") REFERENCES "manufacturers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "brands" ADD CONSTRAINT "brands_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "brands" ADD CONSTRAINT "brands_updatedBy_fkey" FOREIGN KEY ("updatedBy") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "brands" ADD CONSTRAINT "brands_deletedBy_fkey" FOREIGN KEY ("deletedBy") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "sme_users" ADD CONSTRAINT "sme_users_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -542,10 +646,10 @@ ALTER TABLE "sme_users" ADD CONSTRAINT "sme_users_userId_fkey" FOREIGN KEY ("use
 ALTER TABLE "sme_users" ADD CONSTRAINT "sme_users_regionId_fkey" FOREIGN KEY ("regionId") REFERENCES "regions"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "sub_admin_profiles" ADD CONSTRAINT "sub_admin_profiles_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "procurement_officer_profiles" ADD CONSTRAINT "procurement_officer_profiles_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "sub_admin_profiles" ADD CONSTRAINT "sub_admin_profiles_regionId_fkey" FOREIGN KEY ("regionId") REFERENCES "regions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "procurement_officer_profiles" ADD CONSTRAINT "procurement_officer_profiles_regionId_fkey" FOREIGN KEY ("regionId") REFERENCES "regions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "inventory" ADD CONSTRAINT "inventory_smeUserId_fkey" FOREIGN KEY ("smeUserId") REFERENCES "sme_users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

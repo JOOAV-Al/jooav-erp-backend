@@ -219,7 +219,7 @@ model Product {
   thumbnail       String?       // Primary thumbnail image URL
   
   // Status
-  isActive        Boolean       @default(true)
+  status          ProductStatus @default(QUEUE)
   
   // Audit fields
   createdBy       String
@@ -675,9 +675,10 @@ enum UserStatus {
 }
 
 enum ProductStatus {
-  ACTIVE
-  INACTIVE
-  DISCONTINUED
+  DRAFT
+  QUEUE
+  LIVE
+  ARCHIVED
 }
 
 enum OrderStatus {

@@ -149,7 +149,11 @@ export class ProductController {
   @ApiQuery({ name: 'brandId', required: false })
   @ApiQuery({ name: 'categoryId', required: false })
   @ApiQuery({ name: 'variant', required: false, example: '' })
-  @ApiQuery({ name: 'isActive', required: false, type: Boolean })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['DRAFT', 'QUEUE', 'LIVE', 'ARCHIVED'],
+  })
   @ApiQuery({ name: 'includeRelations', required: false, type: Boolean })
   async findAll(
     @Query() query: ProductQueryDto,

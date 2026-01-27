@@ -259,7 +259,7 @@ export class ProductService {
       brandId,
       categoryId,
       variant,
-      isActive,
+      status,
       includeRelations = true,
     } = query;
 
@@ -268,7 +268,7 @@ export class ProductService {
     // Build where conditions
     const where: Prisma.ProductWhereInput = {
       deletedAt: null,
-      ...(isActive !== undefined && { isActive }),
+      ...(status && { status }),
       ...(brandId && { brandId }),
       ...(categoryId && { categoryId }),
       ...(variant && {
@@ -315,7 +315,7 @@ export class ProductService {
       this.prisma.product.findMany({
         where,
         include,
-        orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
+        orderBy: [{ status: 'desc' }, { createdAt: 'desc' }],
         skip,
         take: limit,
       }),
@@ -504,6 +504,7 @@ export class ProductService {
     await this.prisma.product.update({
       where: { id },
       data: {
+        status: 'ARCHIVED',
         deletedAt: new Date(),
         deletedBy: userId,
       },
@@ -531,7 +532,7 @@ export class ProductService {
     const updatedProduct = await this.prisma.product.update({
       where: { id },
       data: {
-        isActive: true,
+        status: 'LIVE',
         updatedBy: userId,
       },
       include: {
@@ -581,7 +582,7 @@ export class ProductService {
     const updatedProduct = await this.prisma.product.update({
       where: { id },
       data: {
-        isActive: false,
+        status: 'ARCHIVED',
         updatedBy: userId,
       },
       include: {

@@ -104,10 +104,10 @@ export class ProductResponseDto {
   images: JsonValue[];
 
   @ApiProperty({
-    description: 'Is product active',
-    example: true,
+    example: 'LIVE',
+    enum: ['DRAFT', 'QUEUE', 'LIVE', 'ARCHIVED'],
   })
-  isActive: boolean;
+  status: 'DRAFT' | 'QUEUE' | 'LIVE' | 'ARCHIVED';
 
   @ApiProperty({
     description: 'Created by user ID',

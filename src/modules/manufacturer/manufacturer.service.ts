@@ -423,7 +423,7 @@ export class ManufacturerService {
 
     // Check if manufacturer has active products
     const activeProducts = manufacturer.products.filter(
-      (p) => p.isActive === true,
+      (p) => p.status === 'LIVE',
     );
     if (activeProducts.length > 0) {
       throw new BadRequestException(
