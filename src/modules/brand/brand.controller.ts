@@ -231,11 +231,13 @@ export class BrandController {
     @Param('id') id: string,
     @Query('includeManufacturer') includeManufacturer?: boolean,
     @Query('includeProducts') includeProducts?: boolean,
+    @Query('includeVariants') includeVariants?: boolean,
     @Query('includeAuditInfo') includeAuditInfo?: boolean,
   ): Promise<SuccessResponse<BrandResponseDto>> {
     const includesDto = {
       includeManufacturer,
       includeProducts,
+      includeVariants,
       includeAuditInfo,
     };
 

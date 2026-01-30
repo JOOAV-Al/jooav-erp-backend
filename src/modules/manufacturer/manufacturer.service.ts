@@ -167,7 +167,7 @@ export class ManufacturerService {
           id: true,
           name: true,
           sku: true,
-          isActive: true,
+          status: true,
           price: true,
         },
         take: 10, // Limit to first 10 products
@@ -248,7 +248,7 @@ export class ManufacturerService {
           id: true,
           name: true,
           sku: true,
-          isActive: true,
+          status: true,
           price: true,
         },
         take: 10, // Limit to first 10 products
@@ -676,7 +676,7 @@ export class ManufacturerService {
           name: brand.name,
           description: brand.description,
           logo: brand.logo,
-          isActive: brand.status === 'ACTIVE',
+          status: brand.status,
         })) || [],
       products: manufacturer.products || [],
     };
