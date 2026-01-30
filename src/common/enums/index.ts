@@ -68,3 +68,13 @@ export enum ProductStatus {
   LIVE = 'LIVE',
   ARCHIVED = 'ARCHIVED',
 }
+
+export enum PackSizeStatus {
+  ACTIVE = 'ACTIVE',
+  ARCHIVED = 'ARCHIVED',
+}
+
+export enum PackTypeStatus {
+  ACTIVE = 'ACTIVE',
+  ARCHIVED = 'ARCHIVED',
+}

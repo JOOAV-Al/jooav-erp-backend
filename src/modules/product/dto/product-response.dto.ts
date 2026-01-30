@@ -62,16 +62,16 @@ export class ProductResponseDto {
   variantId: string;
 
   @ApiProperty({
-    description: 'Pack size',
-    example: '70g',
+    description: 'Pack size ID',
+    example: 'cuid_example_pack_size_id',
   })
-  packSize: string;
+  packSizeId: string;
 
   @ApiProperty({
-    description: 'Packaging type',
-    example: 'Single Pack',
+    description: 'Pack type ID',
+    example: 'cuid_example_pack_type_id',
   })
-  packagingType: string;
+  packTypeId: string;
 
   @ApiProperty({
     description: 'Wholesale price in Naira',
@@ -172,6 +172,24 @@ export class ProductResponseDto {
     required: false,
   })
   manufacturer?: {
+    id: string;
+    name: string;
+  };
+
+  @ApiProperty({
+    description: 'Pack size information',
+    required: false,
+  })
+  packSize?: {
+    id: string;
+    name: string;
+  };
+
+  @ApiProperty({
+    description: 'Pack type information',
+    required: false,
+  })
+  packType?: {
     id: string;
     name: string;
   };

@@ -267,8 +267,171 @@ async function main() {
     }),
   ]);
 
-  // Create sample products
+  // Create sample pack sizes - multiple per variant to showcase new functionality
+  const packSizes = await Promise.all([
+    // Indomie Chicken Curry pack sizes
+    prisma.packSize.create({
+      data: {
+        name: '70g',
+        variantId: variants[0].id, // Indomie Chicken Curry
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.packSize.create({
+      data: {
+        name: '120g',
+        variantId: variants[0].id, // Indomie Chicken Curry
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.packSize.create({
+      data: {
+        name: '200g',
+        variantId: variants[0].id, // Indomie Chicken Curry
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+
+    // Coca-Cola Classic pack sizes
+    prisma.packSize.create({
+      data: {
+        name: '350ml',
+        variantId: variants[1].id, // Coca-Cola Classic
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.packSize.create({
+      data: {
+        name: '500ml',
+        variantId: variants[1].id, // Coca-Cola Classic
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.packSize.create({
+      data: {
+        name: '1.5L',
+        variantId: variants[1].id, // Coca-Cola Classic
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+
+    // Peak Milk Powder pack sizes
+    prisma.packSize.create({
+      data: {
+        name: '400g',
+        variantId: variants[2].id, // Peak Milk Powder
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.packSize.create({
+      data: {
+        name: '900g',
+        variantId: variants[2].id, // Peak Milk Powder
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.packSize.create({
+      data: {
+        name: '1.8kg',
+        variantId: variants[2].id, // Peak Milk Powder
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+  ]);
+
+  // Create sample pack types - multiple per variant to showcase new functionality
+  const packTypes = await Promise.all([
+    // Indomie Chicken Curry pack types
+    prisma.packType.create({
+      data: {
+        name: 'Single Pack',
+        variantId: variants[0].id, // Indomie Chicken Curry
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.packType.create({
+      data: {
+        name: 'Twin Pack',
+        variantId: variants[0].id, // Indomie Chicken Curry
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.packType.create({
+      data: {
+        name: 'Family Pack',
+        variantId: variants[0].id, // Indomie Chicken Curry
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+
+    // Coca-Cola Classic pack types
+    prisma.packType.create({
+      data: {
+        name: 'Glass Bottle',
+        variantId: variants[1].id, // Coca-Cola Classic
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.packType.create({
+      data: {
+        name: 'PET Bottle',
+        variantId: variants[1].id, // Coca-Cola Classic
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.packType.create({
+      data: {
+        name: 'Can',
+        variantId: variants[1].id, // Coca-Cola Classic
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+
+    // Peak Milk Powder pack types
+    prisma.packType.create({
+      data: {
+        name: 'Tin',
+        variantId: variants[2].id, // Peak Milk Powder
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.packType.create({
+      data: {
+        name: 'Pouch',
+        variantId: variants[2].id, // Peak Milk Powder
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.packType.create({
+      data: {
+        name: 'Carton',
+        variantId: variants[2].id, // Peak Milk Powder
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+  ]);
+
+  // Create sample products with diverse pack combinations
   const products = await Promise.all([
+    // Indomie Products - Multiple combinations
     prisma.product.create({
       data: {
         name: 'Indomie Chicken Curry 70g (Single Pack)',
@@ -280,12 +443,79 @@ async function main() {
         categoryId:
           categories.find((c) => c.name === 'Instant Noodles')?.id ||
           categories[0].id,
-        packSize: '70g',
-        packagingType: 'Single Pack',
+        packSizeId: packSizes[0].id, // 70g
+        packTypeId: packTypes[0].id, // Single Pack
         price: 120.0,
         discount: 5.0,
-        thumbnail: 'indomie-chicken-thumb.jpg',
-        images: ['indomie-chicken.jpg'],
+        thumbnail: 'indomie-chicken-70g-single-thumb.jpg',
+        images: ['indomie-chicken-70g-single.jpg'],
+        createdBy: users[0].id,
+        updatedBy: users[0].id,
+      },
+    }),
+    prisma.product.create({
+      data: {
+        name: 'Indomie Chicken Curry 120g (Twin Pack)',
+        description:
+          'Convenient twin pack of instant noodles with chicken curry flavor',
+        sku: 'INDOMIE-CHICKEN-CURRY-120G-TWIN-PACK',
+        brandId: brands[0].id,
+        variantId: variants[0].id,
+        manufacturerId: manufacturers[0].id,
+        categoryId:
+          categories.find((c) => c.name === 'Instant Noodles')?.id ||
+          categories[0].id,
+        packSizeId: packSizes[1].id, // 120g
+        packTypeId: packTypes[1].id, // Twin Pack
+        price: 220.0,
+        discount: 8.0,
+        thumbnail: 'indomie-chicken-120g-twin-thumb.jpg',
+        images: ['indomie-chicken-120g-twin.jpg'],
+        createdBy: users[0].id,
+        updatedBy: users[0].id,
+      },
+    }),
+    prisma.product.create({
+      data: {
+        name: 'Indomie Chicken Curry 200g (Family Pack)',
+        description:
+          'Large family pack of instant noodles with chicken curry flavor',
+        sku: 'INDOMIE-CHICKEN-CURRY-200G-FAMILY-PACK',
+        brandId: brands[0].id,
+        variantId: variants[0].id,
+        manufacturerId: manufacturers[0].id,
+        categoryId:
+          categories.find((c) => c.name === 'Instant Noodles')?.id ||
+          categories[0].id,
+        packSizeId: packSizes[2].id, // 200g
+        packTypeId: packTypes[2].id, // Family Pack
+        price: 350.0,
+        discount: 12.0,
+        thumbnail: 'indomie-chicken-200g-family-thumb.jpg',
+        images: ['indomie-chicken-200g-family.jpg'],
+        createdBy: users[0].id,
+        updatedBy: users[0].id,
+      },
+    }),
+
+    // Coca-Cola Products - Multiple combinations
+    prisma.product.create({
+      data: {
+        name: 'Coca Cola Classic 350ml (Glass Bottle)',
+        description: 'Refreshing cola soft drink in classic glass bottle',
+        sku: 'COCA-COLA-CLASSIC-350ML-GLASS-BOTTLE',
+        brandId: brands[1].id,
+        variantId: variants[1].id,
+        manufacturerId: manufacturers[1].id,
+        categoryId:
+          categories.find((c) => c.name === 'Soft Drinks')?.id ||
+          categories[0].id,
+        packSizeId: packSizes[3].id, // 350ml
+        packTypeId: packTypes[3].id, // Glass Bottle
+        price: 180.0,
+        discount: 5.0,
+        thumbnail: 'coca-cola-350ml-glass-thumb.jpg',
+        images: ['coca-cola-350ml-glass.jpg'],
         createdBy: users[0].id,
         updatedBy: users[0].id,
       },
@@ -293,7 +523,7 @@ async function main() {
     prisma.product.create({
       data: {
         name: 'Coca Cola Classic 500ml (PET Bottle)',
-        description: 'Refreshing cola soft drink',
+        description: 'Refreshing cola soft drink in convenient PET bottle',
         sku: 'COCA-COLA-CLASSIC-500ML-PET-BOTTLE',
         brandId: brands[1].id,
         variantId: variants[1].id,
@@ -301,33 +531,99 @@ async function main() {
         categoryId:
           categories.find((c) => c.name === 'Soft Drinks')?.id ||
           categories[0].id,
-        packSize: '500ml',
-        packagingType: 'PET Bottle',
+        packSizeId: packSizes[4].id, // 500ml
+        packTypeId: packTypes[4].id, // PET Bottle
         price: 200.0,
         discount: 10.0,
-        thumbnail: 'coca-cola-classic-thumb.jpg',
-        images: ['coca-cola-500ml.jpg'],
+        thumbnail: 'coca-cola-500ml-pet-thumb.jpg',
+        images: ['coca-cola-500ml-pet.jpg'],
         createdBy: users[0].id,
         updatedBy: users[0].id,
       },
     }),
     prisma.product.create({
       data: {
-        name: 'Peak Milk Powder 400g (Family Pack)',
-        description: 'Premium quality milk powder for the family',
-        sku: 'PEAK-MILK-POWDER-400G-FAMILY-PACK',
+        name: 'Coca Cola Classic 1.5L (PET Bottle)',
+        description: 'Large family size cola soft drink in PET bottle',
+        sku: 'COCA-COLA-CLASSIC-1-5L-PET-BOTTLE',
+        brandId: brands[1].id,
+        variantId: variants[1].id,
+        manufacturerId: manufacturers[1].id,
+        categoryId:
+          categories.find((c) => c.name === 'Soft Drinks')?.id ||
+          categories[0].id,
+        packSizeId: packSizes[5].id, // 1.5L
+        packTypeId: packTypes[4].id, // PET Bottle
+        price: 450.0,
+        discount: 15.0,
+        thumbnail: 'coca-cola-1-5l-pet-thumb.jpg',
+        images: ['coca-cola-1-5l-pet.jpg'],
+        createdBy: users[0].id,
+        updatedBy: users[0].id,
+      },
+    }),
+
+    // Peak Milk Products - Multiple combinations
+    prisma.product.create({
+      data: {
+        name: 'Peak Milk Powder 400g (Tin)',
+        description: 'Premium quality milk powder in classic tin packaging',
+        sku: 'PEAK-MILK-POWDER-400G-TIN',
         brandId: brands[2].id,
         variantId: variants[2].id,
         manufacturerId: manufacturers[0].id,
         categoryId:
           categories.find((c) => c.name === 'Dairy Products')?.id ||
           categories[2].id,
-        packSize: '400g',
-        packagingType: 'Family Pack',
+        packSizeId: packSizes[6].id, // 400g
+        packTypeId: packTypes[6].id, // Tin
         price: 1500.0,
-        discount: 15.0,
-        thumbnail: 'peak-milk-powder-thumb.jpg',
-        images: ['peak-milk-powder.jpg'],
+        discount: 10.0,
+        thumbnail: 'peak-milk-400g-tin-thumb.jpg',
+        images: ['peak-milk-400g-tin.jpg'],
+        createdBy: users[0].id,
+        updatedBy: users[0].id,
+      },
+    }),
+    prisma.product.create({
+      data: {
+        name: 'Peak Milk Powder 900g (Pouch)',
+        description:
+          'Premium quality milk powder in convenient resealable pouch',
+        sku: 'PEAK-MILK-POWDER-900G-POUCH',
+        brandId: brands[2].id,
+        variantId: variants[2].id,
+        manufacturerId: manufacturers[0].id,
+        categoryId:
+          categories.find((c) => c.name === 'Dairy Products')?.id ||
+          categories[2].id,
+        packSizeId: packSizes[7].id, // 900g
+        packTypeId: packTypes[7].id, // Pouch
+        price: 3200.0,
+        discount: 12.0,
+        thumbnail: 'peak-milk-900g-pouch-thumb.jpg',
+        images: ['peak-milk-900g-pouch.jpg'],
+        createdBy: users[0].id,
+        updatedBy: users[0].id,
+      },
+    }),
+    prisma.product.create({
+      data: {
+        name: 'Peak Milk Powder 1.8kg (Carton)',
+        description: 'Premium quality milk powder in large family size carton',
+        sku: 'PEAK-MILK-POWDER-1-8KG-CARTON',
+        brandId: brands[2].id,
+        variantId: variants[2].id,
+        manufacturerId: manufacturers[0].id,
+        categoryId:
+          categories.find((c) => c.name === 'Dairy Products')?.id ||
+          categories[2].id,
+        packSizeId: packSizes[8].id, // 1.8kg
+        packTypeId: packTypes[8].id, // Carton
+        price: 6000.0,
+        discount: 20.0,
+        thumbnail: 'peak-milk-1-8kg-carton-thumb.jpg',
+        images: ['peak-milk-1-8kg-carton.jpg'],
         createdBy: users[0].id,
         updatedBy: users[0].id,
       },
@@ -365,8 +661,14 @@ async function main() {
   console.log(
     `   - ${4} Users (1 Super Admin, 1 Admin, 1 Sub-Admin, 1 SME User)`,
   );
+  console.log(`   - ${manufacturers.length} Manufacturers`);
+  console.log(`   - ${brands.length} Brands`);
+  console.log(`   - ${variants.length} Variants`);
+  console.log(`   - ${packSizes.length} Pack Sizes`);
+  console.log(`   - ${packTypes.length} Pack Types`);
   console.log(`   - ${products.length} Products`);
   console.log(`   - ${5} System Configurations`);
+  console.log('🎯 Enhanced pack entity combinations created!');
 }
 
 main()

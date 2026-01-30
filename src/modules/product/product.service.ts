@@ -32,17 +32,25 @@ export class ProductService {
   private async generateProductIdentifiers(
     brandId: string,
     variantId: string,
-    packSize: string,
-    packagingType: string,
+    packSizeId: string,
+    packTypeId: string,
   ): Promise<{ name: string; sku: string; barcode: string }> {
-    // Get brand and variant names
-    const [brand, variant] = await Promise.all([
+    // Get brand, variant, pack size, and pack type names
+    const [brand, variant, packSize, packType] = await Promise.all([
       this.prisma.brand.findUnique({
         where: { id: brandId },
         select: { name: true },
       }),
       this.prisma.variant.findUnique({
         where: { id: variantId },
+        select: { name: true },
+      }),
+      this.prisma.packSize.findUnique({
+        where: { id: packSizeId },
+        select: { name: true },
+      }),
+      this.prisma.packType.findUnique({
+        where: { id: packTypeId },
         select: { name: true },
       }),
     ]);
@@ -55,20 +63,28 @@ export class ProductService {
       throw new BadRequestException('Variant not found');
     }
 
+    if (!packSize) {
+      throw new BadRequestException('Pack size not found');
+    }
+
+    if (!packType) {
+      throw new BadRequestException('Pack type not found');
+    }
+
     // Generate name: "Brand Variant PackSize (PackType)"
-    const name = `${brand.name} ${variant.name} ${packSize} (${packagingType})`;
+    const name = `${brand.name} ${variant.name} ${packSize.name} (${packType.name})`;
 
     // Generate SKU: "BRAND-VARIANT-PACKSIZE-PACKTYPE"
     const sku = StringUtils.generateSlug(
-      `${brand.name}-${variant.name}-${packSize}-${packagingType}`,
+      `${brand.name}-${variant.name}-${packSize.name}-${packType.name}`,
     ).toUpperCase();
 
     // Generate EAN-13 barcode
     const barcode = BarcodeGenerator.generateEAN13(
       brand.name,
       variant.name,
-      packSize,
-      packagingType,
+      packSize.name,
+      packType.name,
     );
 
     return { name, sku, barcode };
@@ -122,6 +138,47 @@ export class ProductService {
     }
   }
 
+  /**
+   * Validate that pack size and pack type exist, are active, and belong to the specified variant
+   */
+  private async validatePackEntities(
+    packSizeId: string,
+    packTypeId: string,
+    variantId: string,
+  ): Promise<void> {
+    // Validate pack size
+    const packSize = await this.prisma.packSize.findFirst({
+      where: {
+        id: packSizeId,
+        variantId: variantId,
+        status: 'ACTIVE',
+        deletedAt: null,
+      },
+    });
+
+    if (!packSize) {
+      throw new BadRequestException(
+        'Pack size not found, is not active, or does not belong to the specified variant',
+      );
+    }
+
+    // Validate pack type
+    const packType = await this.prisma.packType.findFirst({
+      where: {
+        id: packTypeId,
+        variantId: variantId,
+        status: 'ACTIVE',
+        deletedAt: null,
+      },
+    });
+
+    if (!packType) {
+      throw new BadRequestException(
+        'Pack type not found, is not active, or does not belong to the specified variant',
+      );
+    }
+  }
+
   async create(
     createProductDto: CreateProductDto,
     userId: string,
@@ -130,8 +187,8 @@ export class ProductService {
       brandId,
       categoryId,
       variantId,
-      packSize,
-      packagingType,
+      packSizeId,
+      packTypeId,
       barcode: providedBarcode,
       ...rest
     } = createProductDto;
@@ -143,6 +200,9 @@ export class ProductService {
     // Validate that variant exists and belongs to the specified brand
     await this.validateVariant(variantId, brandId);
 
+    // Validate pack entities
+    await this.validatePackEntities(packSizeId, packTypeId, variantId);
+
     // Generate name, SKU, and barcode (if not provided)
     const {
       name,
@@ -151,8 +211,8 @@ export class ProductService {
     } = await this.generateProductIdentifiers(
       brandId,
       variantId,
-      packSize,
-      packagingType,
+      packSizeId,
+      packTypeId,
     );
 
     // Use provided barcode or generated one (but barcode is currently not used in schema)
@@ -187,8 +247,8 @@ export class ProductService {
           categoryId,
           manufacturerId,
           variantId,
-          packSize,
-          packagingType,
+          packSizeId,
+          packTypeId,
           ...rest,
           createdBy: userId,
           updatedBy: userId,
@@ -213,6 +273,12 @@ export class ProductService {
             },
           },
           manufacturer: {
+            select: { id: true, name: true },
+          },
+          packSize: {
+            select: { id: true, name: true },
+          },
+          packType: {
             select: { id: true, name: true },
           },
         },
@@ -308,6 +374,12 @@ export class ProductService {
           manufacturer: {
             select: { id: true, name: true },
           },
+          packSize: {
+            select: { id: true, name: true },
+          },
+          packType: {
+            select: { id: true, name: true },
+          },
         }
       : undefined;
 
@@ -349,6 +421,12 @@ export class ProductService {
         manufacturer: {
           select: { id: true, name: true },
         },
+        packSize: {
+          select: { id: true, name: true },
+        },
+        packType: {
+          select: { id: true, name: true },
+        },
       },
     });
 
@@ -373,7 +451,7 @@ export class ProductService {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    const { brandId, categoryId, variantId, packSize, packagingType, ...rest } =
+    const { brandId, categoryId, variantId, packSizeId, packTypeId, ...rest } =
       updateProductDto;
 
     let name: string | undefined;
@@ -381,11 +459,11 @@ export class ProductService {
     let manufacturerId: string | undefined;
 
     // If any identifier fields are being updated, regenerate name, SKU
-    if (brandId || variantId || packSize || packagingType) {
+    if (brandId || variantId || packSizeId || packTypeId) {
       const finalBrandId = brandId || existingProduct.brandId;
       const finalVariantId = variantId || existingProduct.variantId;
-      const finalPackSize = packSize || existingProduct.packSize;
-      const finalPackagingType = packagingType || existingProduct.packagingType;
+      const finalPackSizeId = packSizeId || existingProduct.packSizeId;
+      const finalPackTypeId = packTypeId || existingProduct.packTypeId;
 
       // Validate references if changed and get manufacturerId from brand if brandId is provided
       if (brandId || categoryId) {
@@ -403,11 +481,20 @@ export class ProductService {
         await this.validateVariant(variantId, finalBrandId);
       }
 
+      // Validate pack entities if changed
+      if (packSizeId || packTypeId) {
+        await this.validatePackEntities(
+          finalPackSizeId,
+          finalPackTypeId,
+          finalVariantId,
+        );
+      }
+
       const identifiers = await this.generateProductIdentifiers(
         finalBrandId,
         finalVariantId,
-        finalPackSize,
-        finalPackagingType,
+        finalPackSizeId,
+        finalPackTypeId,
       );
 
       name = identifiers.name;
@@ -455,6 +542,12 @@ export class ProductService {
             },
           },
           manufacturer: {
+            select: { id: true, name: true },
+          },
+          packSize: {
+            select: { id: true, name: true },
+          },
+          packType: {
             select: { id: true, name: true },
           },
         },
@@ -555,6 +648,12 @@ export class ProductService {
         manufacturer: {
           select: { id: true, name: true },
         },
+        packSize: {
+          select: { id: true, name: true },
+        },
+        packType: {
+          select: { id: true, name: true },
+        },
       },
     });
 
@@ -603,6 +702,12 @@ export class ProductService {
           },
         },
         manufacturer: {
+          select: { id: true, name: true },
+        },
+        packSize: {
+          select: { id: true, name: true },
+        },
+        packType: {
           select: { id: true, name: true },
         },
       },

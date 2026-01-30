@@ -64,6 +64,12 @@ model User {
   createdProducts      Product[]          @relation("CreatedProducts")
   updatedProducts      Product[]          @relation("UpdatedProducts")
   deletedProducts      Product[]          @relation("DeletedProducts")
+  createdPackSizes     PackSize[]         @relation("CreatedPackSizes")
+  updatedPackSizes     PackSize[]         @relation("UpdatedPackSizes")
+  deletedPackSizes     PackSize[]         @relation("DeletedPackSizes")
+  createdPackTypes     PackType[]         @relation("CreatedPackTypes")
+  updatedPackTypes     PackType[]         @relation("UpdatedPackTypes")
+  deletedPackTypes     PackType[]         @relation("DeletedPackTypes")
 
   @@map("users")
 }
@@ -183,13 +189,67 @@ model Variant {
   deletedAt DateTime?
 
   // Relations
-  brand         Brand     @relation("BrandVariants", fields: [brandId], references: [id])
-  products      Product[] @relation("VariantProducts")
-  createdByUser User      @relation("CreatedVariants", fields: [createdBy], references: [id])
-  updatedByUser User      @relation("UpdatedVariants", fields: [updatedBy], references: [id])
-  deletedByUser User?     @relation("DeletedVariants", fields: [deletedBy], references: [id])
+  brand         Brand      @relation("BrandVariants", fields: [brandId], references: [id])
+  products      Product[]  @relation("VariantProducts")
+  packSizes     PackSize[] @relation("VariantPackSizes")
+  packTypes     PackType[] @relation("VariantPackTypes")
+  createdByUser User       @relation("CreatedVariants", fields: [createdBy], references: [id])
+  updatedByUser User       @relation("UpdatedVariants", fields: [updatedBy], references: [id])
+  deletedByUser User?      @relation("DeletedVariants", fields: [deletedBy], references: [id])
 
   @@map("variants")
+}
+
+model PackSize {
+  id        String         @id @default(cuid())
+  name      String         // e.g., "70g", "500ml", "1kg", "150g Family Pack"
+  variantId String
+  status    PackSizeStatus @default(ACTIVE)
+
+  // Audit fields
+  createdBy String
+  updatedBy String
+  deletedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  // Relations
+  variant       Variant   @relation("VariantPackSizes", fields: [variantId], references: [id])
+  products      Product[] @relation("PackSizeProducts")
+  createdByUser User      @relation("CreatedPackSizes", fields: [createdBy], references: [id])
+  updatedByUser User      @relation("UpdatedPackSizes", fields: [updatedBy], references: [id])
+  deletedByUser User?     @relation("DeletedPackSizes", fields: [deletedBy], references: [id])
+
+  // Prevent duplicate names per variant
+  @@unique([variantId, name])
+  @@map("pack_sizes")
+}
+
+model PackType {
+  id        String         @id @default(cuid())
+  name      String         // e.g., "Single Pack", "5-Pack", "Box", "PET Bottle", "Tin"
+  variantId String
+  status    PackTypeStatus @default(ACTIVE)
+
+  // Audit fields
+  createdBy String
+  updatedBy String
+  deletedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  // Relations
+  variant       Variant   @relation("VariantPackTypes", fields: [variantId], references: [id])
+  products      Product[] @relation("PackTypeProducts")
+  createdByUser User      @relation("CreatedPackTypes", fields: [createdBy], references: [id])
+  updatedByUser User      @relation("UpdatedPackTypes", fields: [updatedBy], references: [id])
+  deletedByUser User?     @relation("DeletedPackTypes", fields: [deletedBy], references: [id])
+
+  // Prevent duplicate names per variant
+  @@unique([variantId, name])
+  @@map("pack_types")
 }
 
 model Product {
@@ -205,10 +265,8 @@ model Product {
   variantId       String        // Links to Variant entity
   categoryId      String        // Links to Category (can be subcategory)
   manufacturerId  String        // Links to Manufacturer
-  
-  // Product Specifications
-  packSize        String        // e.g., "70g", "500ml", "1kg", "150g Family Pack"
-  packagingType   String        // e.g., "Single Pack", "5-Pack", "Box", "PET Bottle", "Tin"
+  packSizeId      String        // Links to PackSize entity
+  packTypeId      String        // Links to PackType entity
   
   // Pricing (Wholesale price)
   price           Decimal?      @db.Decimal(10,2)
@@ -234,6 +292,8 @@ model Product {
   variant         Variant       @relation("VariantProducts", fields: [variantId], references: [id])
   category        Category      @relation(fields: [categoryId], references: [id])
   manufacturer    Manufacturer  @relation("ManufacturerProducts", fields: [manufacturerId], references: [id])
+  packSize        PackSize      @relation("PackSizeProducts", fields: [packSizeId], references: [id])
+  packType        PackType      @relation("PackTypeProducts", fields: [packTypeId], references: [id])
   
   createdByUser   User          @relation("CreatedProducts", fields: [createdBy], references: [id])
   updatedByUser   User          @relation("UpdatedProducts", fields: [updatedBy], references: [id])
@@ -678,6 +738,16 @@ enum ProductStatus {
   DRAFT
   QUEUE
   LIVE
+  ARCHIVED
+}
+
+enum PackSizeStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum PackTypeStatus {
+  ACTIVE
   ARCHIVED
 }
 
