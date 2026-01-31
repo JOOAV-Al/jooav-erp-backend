@@ -626,50 +626,18 @@ export class BrandService {
   ): Promise<{ message: string; brandName: string }> {
     const existingBrand = await this.findOne(id);
 
-    // Check if brand has associated products
+    // Check if brand has associated active products
     const productCount = await this.prisma.product.count({
       where: { brandId: id, deletedAt: null },
     });
 
     if (productCount > 0) {
       throw new BadRequestException(
-        `Cannot delete brand with ${productCount} associated product(s). Please remove or reassign all products first.`,
+        `Cannot delete brand with ${productCount} active product(s). Please remove or archive all products first.`,
       );
     }
 
-    // Check if brand has associated variants
-    const variantCount = await this.prisma.variant.count({
-      where: { brandId: id, deletedAt: null },
-    });
-
-    if (variantCount > 0) {
-      throw new BadRequestException(
-        `Cannot delete brand with ${variantCount} associated variant(s). Please remove or reassign all variants first.`,
-      );
-    }
-
-    // Check if brand has associated pack entities
-    const packSizeCount = await this.prisma.packSize.count({
-      where: {
-        variant: { brandId: id },
-        status: 'ACTIVE',
-      },
-    });
-
-    const packTypeCount = await this.prisma.packType.count({
-      where: {
-        variant: { brandId: id },
-        status: 'ACTIVE',
-      },
-    });
-
-    if (packSizeCount > 0 || packTypeCount > 0) {
-      throw new BadRequestException(
-        `Cannot delete brand with ${packSizeCount} pack size(s) and ${packTypeCount} pack type(s). Please remove all variants and their pack entities first.`,
-      );
-    }
-
-    // Soft delete the brand
+    // Soft delete the brand - variants and pack entities can remain for historical purposes
     await this.prisma.brand.update({
       where: { id },
       data: {
@@ -693,6 +661,103 @@ export class BrandService {
     return {
       message: 'Brand deleted successfully',
       brandName: existingBrand.name,
+    };
+  }
+
+  async activate(id: string, userId: string): Promise<BrandResponseDto> {
+    // Check if brand exists in deleted state
+    const deletedBrand = await this.prisma.brand.findFirst({
+      where: { id, deletedAt: { not: null } },
+    });
+
+    if (!deletedBrand) {
+      throw new NotFoundException('Brand not found or is not in deleted state');
+    }
+
+    // Check for name conflicts with active brands
+    const conflictBrand = await this.prisma.brand.findFirst({
+      where: {
+        name: { equals: deletedBrand.name, mode: 'insensitive' },
+        deletedAt: null,
+        NOT: { id },
+      },
+    });
+
+    if (conflictBrand) {
+      throw new ConflictException(
+        `A brand with name "${deletedBrand.name}" already exists`,
+      );
+    }
+
+    // Reactivate the brand
+    const brand = await this.prisma.brand.update({
+      where: { id },
+      data: {
+        deletedAt: null,
+        deletedBy: null,
+        updatedBy: userId,
+      },
+      include: {
+        manufacturer: {
+          select: { id: true, name: true, status: true },
+        },
+        variants: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            createdAt: true,
+            updatedAt: true,
+            _count: {
+              select: { products: { where: { deletedAt: null } } },
+            },
+          },
+        },
+        _count: {
+          select: { products: { where: { deletedAt: null } } },
+        },
+      },
+    });
+
+    // Invalidate brand-related caches
+    await this.cacheInvalidationService.invalidateBrand(id);
+
+    // Log audit trail
+    await this.auditService.createAuditLog({
+      action: 'ACTIVATE',
+      resource: 'Brand',
+      resourceId: id,
+      userId,
+      metadata: { brandName: brand.name },
+    });
+
+    return {
+      id: brand.id,
+      name: brand.name,
+      description: brand.description,
+      logo: brand.logo,
+      status: brand.status as BrandStatus,
+      manufacturerId: brand.manufacturerId || '',
+      createdAt: brand.createdAt,
+      updatedAt: brand.updatedAt,
+      createdBy: brand.createdBy,
+      updatedBy: brand.updatedBy,
+      manufacturer: brand.manufacturer
+        ? {
+            id: brand.manufacturer.id,
+            name: brand.manufacturer.name,
+            status: brand.manufacturer.status,
+          }
+        : undefined,
+      variants: brand.variants.map((variant) => ({
+        id: variant.id,
+        name: variant.name,
+        description: variant.description || undefined,
+        createdAt: variant.createdAt,
+        updatedAt: variant.updatedAt,
+        _count: { products: variant._count.products },
+      })),
     };
   }
 

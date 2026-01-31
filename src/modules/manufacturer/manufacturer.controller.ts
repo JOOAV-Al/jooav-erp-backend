@@ -364,6 +364,46 @@ export class ManufacturerController {
     );
   }
 
+  @Patch(':id/activate')
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Reactivate manufacturer (Admin only)',
+    description: 'Reactivate a manufacturer from soft delete state',
+  })
+  @ApiParam({ name: 'id', description: 'Manufacturer ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Manufacturer reactivated successfully',
+    type: ManufacturerResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Manufacturer not found or not in deleted state',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Conflict - Manufacturer with same name already exists',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin access required',
+  })
+  async activate(
+    @Param('id') id: string,
+    @CurrentUserId() adminId: string,
+    @Request() req: any,
+  ): Promise<SuccessResponse<ManufacturerResponseDto>> {
+    const manufacturer = await this.manufacturerService.activate(
+      id,
+      adminId,
+      req,
+    );
+    return new SuccessResponse(
+      ResponseMessages.activated('Manufacturer', manufacturer.name),
+      manufacturer,
+    );
+  }
+
   // ================================
   // MANUFACTURER PRODUCTS & ORDERS
   // ================================

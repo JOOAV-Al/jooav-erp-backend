@@ -134,7 +134,10 @@ export class BrandController {
   async findAll(
     @Query() query: BrandQueryDto,
   ): Promise<SuccessResponse<PaginatedResponse<BrandResponseDto>>> {
-    const result = await this.brandService.findAll(query);
+    const result = await this.brandService.findAll(query, {
+      includeManufacturer: true,
+      includeVariants: true,
+    });
     return new SuccessResponse(
       ResponseMessages.foundItems(
         result.data.length,
@@ -454,6 +457,29 @@ export class BrandController {
     return new SuccessResponse(
       ResponseMessages.deleted('Brand', brandName),
       null,
+    );
+  }
+
+  @Patch(':id/activate')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Reactivate brand (restore from soft delete)' })
+  @ApiUnauthorizedResponse({ description: 'Authentication required' })
+  @ApiForbiddenResponse({ description: 'Admin or Super Admin role required' })
+  @ApiParam({ name: 'id', description: 'Brand ID' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Brand reactivated successfully',
+    type: BrandResponseDto,
+  })
+  @AuditLog({ action: 'ACTIVATE', resource: 'Brand' })
+  async activate(
+    @Param('id') id: string,
+    @CurrentUserId() userId: string,
+  ): Promise<SuccessResponse<BrandResponseDto>> {
+    const brand = await this.brandService.activate(id, userId);
+    return new SuccessResponse(
+      ResponseMessages.activated('Brand', brand.name),
+      brand,
     );
   }
 }

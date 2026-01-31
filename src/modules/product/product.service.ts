@@ -620,12 +620,93 @@ export class ProductService {
   }
 
   async activate(id: string, userId: string): Promise<ProductResponseDto> {
-    const product = await this.findOne(id);
+    // Check if product exists (including soft deleted ones)
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      include: {
+        brand: { select: { id: true, name: true, deletedAt: true } },
+        variant: { select: { id: true, name: true, deletedAt: true } },
+        category: { select: { id: true, name: true, deletedAt: true } },
+        manufacturer: { select: { id: true, name: true, deletedAt: true } },
+        packSize: { select: { id: true, name: true, status: true } },
+        packType: { select: { id: true, name: true, status: true } },
+      },
+    });
+
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${id} not found`);
+    }
+
+    // Check if this is a reactivation from soft delete or status change
+    const isDeleted = product.deletedAt !== null;
+    const isInactive =
+      product.status === 'ARCHIVED' || product.status === 'DRAFT';
+
+    if (!isDeleted && !isInactive) {
+      throw new BadRequestException('Product is already active');
+    }
+
+    // If reactivating from soft delete, validate relationships
+    if (isDeleted) {
+      // Check if related entities are active
+      if (product.brand.deletedAt) {
+        throw new BadRequestException(
+          'Cannot reactivate product because its brand is deleted. Reactivate the brand first.',
+        );
+      }
+
+      if (product.variant.deletedAt) {
+        throw new BadRequestException(
+          'Cannot reactivate product because its variant is deleted. Reactivate the variant first.',
+        );
+      }
+
+      if (product.category && product.category.deletedAt) {
+        throw new BadRequestException(
+          'Cannot reactivate product because its category is deleted. Reactivate the category first.',
+        );
+      }
+
+      if (product.manufacturer && product.manufacturer.deletedAt) {
+        throw new BadRequestException(
+          'Cannot reactivate product because its manufacturer is deleted. Reactivate the manufacturer first.',
+        );
+      }
+
+      if (product.packSize && product.packSize.status !== 'ACTIVE') {
+        throw new BadRequestException(
+          'Cannot reactivate product because its pack size is not active. Reactivate the pack size first.',
+        );
+      }
+
+      if (product.packType && product.packType.status !== 'ACTIVE') {
+        throw new BadRequestException(
+          'Cannot reactivate product because its pack type is not active. Reactivate the pack type first.',
+        );
+      }
+
+      // Check for SKU conflicts if reactivating from deleted state
+      const conflictProduct = await this.prisma.product.findFirst({
+        where: {
+          sku: { equals: product.sku, mode: 'insensitive' },
+          deletedAt: null,
+          NOT: { id },
+        },
+      });
+
+      if (conflictProduct) {
+        throw new ConflictException(
+          `A product with SKU "${product.sku}" already exists`,
+        );
+      }
+    }
 
     const updatedProduct = await this.prisma.product.update({
       where: { id },
       data: {
         status: 'LIVE',
+        deletedAt: null,
+        deletedBy: null,
         updatedBy: userId,
       },
       include: {
@@ -666,6 +747,7 @@ export class ProductService {
       metadata: {
         productName: product.name,
         sku: product.sku,
+        wasDeleted: isDeleted,
       },
     });
 

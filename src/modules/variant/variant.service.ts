@@ -770,7 +770,7 @@ export class VariantService {
       include: {
         _count: {
           select: {
-            products: true,
+            products: { where: { deletedAt: null } },
           },
         },
       },
@@ -780,31 +780,52 @@ export class VariantService {
       throw new NotFoundException('Variant not found');
     }
 
-    // Check if variant has associated products
+    // Check if variant has associated active products
     if (existingVariant._count.products > 0) {
       throw new BadRequestException(
-        'Cannot delete variant with associated products. Please remove or reassign all products first.',
+        `Cannot delete variant with ${existingVariant._count.products} active product(s). Please remove or archive all products first.`,
       );
     }
 
-    // Check if variant has associated pack entities
-    const packSizeCount = await this.prisma.packSize.count({
-      where: { variantId: id, status: 'ACTIVE' },
-    });
-
-    const packTypeCount = await this.prisma.packType.count({
-      where: { variantId: id, status: 'ACTIVE' },
-    });
-
-    if (packSizeCount > 0 || packTypeCount > 0) {
-      throw new BadRequestException(
-        `Cannot delete variant with ${packSizeCount} active pack size(s) and ${packTypeCount} active pack type(s). Please archive all pack entities first.`,
-      );
-    }
-
-    // Soft delete - this will also automatically archive all pack entities via business rules
+    // Soft delete the variant and cascade to pack entities if no live products reference them
     const result = await this.prisma.$transaction(async (tx) => {
-      // Archive any remaining pack entities
+      // Check for pack sizes that have live products
+      const packSizesWithProducts = await tx.packSize.findMany({
+        where: {
+          variantId: id,
+          products: {
+            some: { deletedAt: null },
+          },
+        },
+        select: { id: true, name: true },
+      });
+
+      // Check for pack types that have live products
+      const packTypesWithProducts = await tx.packType.findMany({
+        where: {
+          variantId: id,
+          products: {
+            some: { deletedAt: null },
+          },
+        },
+        select: { id: true, name: true },
+      });
+
+      if (packSizesWithProducts.length > 0) {
+        const packNames = packSizesWithProducts.map((p) => p.name).join(', ');
+        throw new BadRequestException(
+          `Cannot delete variant because pack sizes (${packNames}) have live products referencing them.`,
+        );
+      }
+
+      if (packTypesWithProducts.length > 0) {
+        const packNames = packTypesWithProducts.map((p) => p.name).join(', ');
+        throw new BadRequestException(
+          `Cannot delete variant because pack types (${packNames}) have live products referencing them.`,
+        );
+      }
+
+      // Safe to cascade delete - soft delete pack entities first
       await tx.packSize.updateMany({
         where: { variantId: id },
         data: {
@@ -825,7 +846,7 @@ export class VariantService {
         },
       });
 
-      // Delete the variant
+      // Finally, soft delete the variant
       return await tx.variant.update({
         where: { id },
         data: {
@@ -838,7 +859,144 @@ export class VariantService {
     // Invalidate variant-related caches
     await this.cacheInvalidationService.invalidateVariant(id);
 
-    return { message: 'Variant deleted successfully' };
+    return {
+      message: 'Variant and its pack configurations deleted successfully',
+    };
+  }
+
+  async activate(id: string, userId: string): Promise<VariantResponseDto> {
+    // Check if variant exists in deleted state
+    const deletedVariant = await this.prisma.variant.findFirst({
+      where: { id, deletedAt: { not: null } },
+      include: { brand: true },
+    });
+
+    if (!deletedVariant) {
+      throw new NotFoundException(
+        'Variant not found or is not in deleted state',
+      );
+    }
+
+    // Check if brand is still active
+    if (deletedVariant.brand.deletedAt) {
+      throw new BadRequestException(
+        'Cannot reactivate variant because its brand is deleted. Reactivate the brand first.',
+      );
+    }
+
+    // Check for name conflicts with active variants in the same brand
+    const conflictVariant = await this.prisma.variant.findFirst({
+      where: {
+        name: { equals: deletedVariant.name, mode: 'insensitive' },
+        brandId: deletedVariant.brandId,
+        deletedAt: null,
+        NOT: { id },
+      },
+    });
+
+    if (conflictVariant) {
+      throw new ConflictException(
+        `A variant with name "${deletedVariant.name}" already exists in this brand`,
+      );
+    }
+
+    // Reactivate the variant and its pack configurations in a transaction
+    const variant = await this.prisma.$transaction(async (tx) => {
+      // Reactivate the variant
+      const reactivatedVariant = await tx.variant.update({
+        where: { id },
+        data: {
+          deletedAt: null,
+          deletedBy: null,
+          updatedBy: userId,
+        },
+        include: {
+          brand: true,
+          _count: {
+            select: { products: { where: { deletedAt: null } } },
+          },
+        },
+      });
+
+      // Reactivate associated pack entities that were deleted with this variant
+      await tx.packSize.updateMany({
+        where: {
+          variantId: id,
+          deletedAt: { not: null },
+        },
+        data: {
+          status: 'ACTIVE',
+          deletedAt: null,
+          deletedBy: null,
+          updatedBy: userId,
+        },
+      });
+
+      await tx.packType.updateMany({
+        where: {
+          variantId: id,
+          deletedAt: { not: null },
+        },
+        data: {
+          status: 'ACTIVE',
+          deletedAt: null,
+          deletedBy: null,
+          updatedBy: userId,
+        },
+      });
+
+      return reactivatedVariant;
+    });
+
+    // Get the reactivated pack entities for response
+    const reactivatedVariantWithPacks = await this.prisma.variant.findUnique({
+      where: { id },
+      include: {
+        brand: true,
+        packSizes: {
+          where: { deletedAt: null },
+        },
+        packTypes: {
+          where: { deletedAt: null },
+        },
+        _count: {
+          select: { products: { where: { deletedAt: null } } },
+        },
+      },
+    });
+
+    // Invalidate variant-related caches
+    await this.cacheInvalidationService.invalidateVariant(id);
+
+    return {
+      id: reactivatedVariantWithPacks!.id,
+      name: reactivatedVariantWithPacks!.name,
+      description: reactivatedVariantWithPacks!.description || undefined,
+      brandId: reactivatedVariantWithPacks!.brandId,
+      createdBy: reactivatedVariantWithPacks!.createdBy,
+      updatedBy: reactivatedVariantWithPacks!.updatedBy,
+      createdAt: reactivatedVariantWithPacks!.createdAt,
+      updatedAt: reactivatedVariantWithPacks!.updatedAt,
+      brand: {
+        id: reactivatedVariantWithPacks!.brand.id,
+        name: reactivatedVariantWithPacks!.brand.name,
+      },
+      _count: { products: reactivatedVariantWithPacks!._count.products },
+      packSizes: reactivatedVariantWithPacks!.packSizes.map((packSize) => ({
+        id: packSize.id,
+        name: packSize.name,
+        status: packSize.status,
+        createdAt: packSize.createdAt,
+        updatedAt: packSize.updatedAt,
+      })),
+      packTypes: reactivatedVariantWithPacks!.packTypes.map((packType) => ({
+        id: packType.id,
+        name: packType.name,
+        status: packType.status,
+        createdAt: packType.createdAt,
+        updatedAt: packType.updatedAt,
+      })),
+    };
   }
 
   async getStats(): Promise<VariantStatsDto> {

@@ -460,6 +460,79 @@ export class ManufacturerService {
     };
   }
 
+  async activate(
+    id: string,
+    adminId: string,
+    request: any,
+  ): Promise<ManufacturerResponseDto> {
+    // Check if manufacturer exists in deleted state
+    const deletedManufacturer = await this.prisma.manufacturer.findFirst({
+      where: { id, deletedAt: { not: null } },
+    });
+
+    if (!deletedManufacturer) {
+      throw new NotFoundException(
+        'Manufacturer not found or is not in deleted state',
+      );
+    }
+
+    // Check for name conflicts with active manufacturers
+    const conflictManufacturer = await this.prisma.manufacturer.findFirst({
+      where: {
+        name: { equals: deletedManufacturer.name, mode: 'insensitive' },
+        deletedAt: null,
+        NOT: { id },
+      },
+    });
+
+    if (conflictManufacturer) {
+      throw new ConflictException(
+        `A manufacturer with name "${deletedManufacturer.name}" already exists`,
+      );
+    }
+
+    // Reactivate the manufacturer
+    const manufacturer = await this.prisma.manufacturer.update({
+      where: { id },
+      data: {
+        status: ManufacturerStatus.ACTIVE,
+        deletedAt: null,
+        deletedBy: null,
+        updatedBy: adminId,
+      },
+      include: {
+        _count: {
+          select: {
+            products: { where: { deletedAt: null } },
+          },
+        },
+      },
+    });
+
+    // Log audit event
+    await this.auditService.createAuditLog({
+      userId: adminId,
+      action: 'ACTIVATE_MANUFACTURER',
+      resource: 'MANUFACTURER',
+      resourceId: id,
+      newData: manufacturer,
+      ipAddress: request?.ip,
+      userAgent: request?.get('user-agent'),
+      metadata: { manufacturerName: manufacturer.name },
+    });
+
+    return {
+      id: manufacturer.id,
+      name: manufacturer.name,
+      description: manufacturer.description || undefined,
+      status: manufacturer.status,
+      productsCount: manufacturer._count.products,
+      ordersCount: 0,
+      createdAt: manufacturer.createdAt,
+      updatedAt: manufacturer.updatedAt,
+    };
+  }
+
   /**
    * Get manufacturer statistics
    */
