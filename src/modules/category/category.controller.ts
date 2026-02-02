@@ -53,13 +53,15 @@ export class CategoryController {
   @UseGuards(UnifiedAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @ApiBearerAuth('admin-access-token')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Create a new category with optional subcategories',
-    description: 'Create a category and optionally create multiple subcategories in a single transaction'
+    description:
+      'Create a category and optionally create multiple subcategories in a single transaction',
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
-    description: 'Category created successfully (with subcategories if provided)',
+    description:
+      'Category created successfully (with subcategories if provided)',
     type: CategoryResponseDto,
   })
   @AuditLog({ action: 'CREATE', resource: 'category' })
@@ -80,7 +82,7 @@ export class CategoryController {
       userId,
     );
 
-    const message = createCategoryDto.subcategories?.length 
+    const message = createCategoryDto.subcategories?.length
       ? `Category created successfully with ${createCategoryDto.subcategories.length} subcategory(ies)`
       : 'Category created successfully';
 
