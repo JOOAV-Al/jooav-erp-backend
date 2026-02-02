@@ -37,6 +37,8 @@ import {
   BrandQueryDto,
   BrandResponseDto,
   BrandStatsDto,
+  BulkBrandOperationDto,
+  BulkBrandOperationResultDto,
 } from './dto';
 import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -51,7 +53,7 @@ import { BaseResponse } from '../../common/dto/base-response.dto';
 import { SuccessResponse } from '../../common/dto/api-response.dto';
 import { ResponseMessages } from '../../common/utils/response-messages.util';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { UserRole } from '../../common/enums';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Brands')
 @Controller('brands')
@@ -133,8 +135,14 @@ export class BrandController {
   })
   async findAll(
     @Query() query: BrandQueryDto,
+    @Query('includeManufacturer') includeManufacturer?: boolean,
+    @Query('includeProducts') includeProducts?: boolean,
+    @Query('includeAuditInfo') includeAuditInfo?: boolean,
   ): Promise<SuccessResponse<PaginatedResponse<BrandResponseDto>>> {
-    const result = await this.brandService.findAll(query);
+    const result = await this.brandService.findAll(query, {
+      includeManufacturer: true,
+      includeVariants: true,
+    });
     return new SuccessResponse(
       ResponseMessages.foundItems(
         result.data.length,
@@ -231,11 +239,13 @@ export class BrandController {
     @Param('id') id: string,
     @Query('includeManufacturer') includeManufacturer?: boolean,
     @Query('includeProducts') includeProducts?: boolean,
+    @Query('includeVariants') includeVariants?: boolean,
     @Query('includeAuditInfo') includeAuditInfo?: boolean,
   ): Promise<SuccessResponse<BrandResponseDto>> {
     const includesDto = {
       includeManufacturer,
       includeProducts,
+      includeVariants,
       includeAuditInfo,
     };
 
@@ -452,6 +462,29 @@ export class BrandController {
     return new SuccessResponse(
       ResponseMessages.deleted('Brand', brandName),
       null,
+    );
+  }
+
+  @Patch(':id/activate')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Reactivate brand (restore from soft delete)' })
+  @ApiUnauthorizedResponse({ description: 'Authentication required' })
+  @ApiForbiddenResponse({ description: 'Admin or Super Admin role required' })
+  @ApiParam({ name: 'id', description: 'Brand ID' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Brand reactivated successfully',
+    type: BrandResponseDto,
+  })
+  @AuditLog({ action: 'ACTIVATE', resource: 'Brand' })
+  async activate(
+    @Param('id') id: string,
+    @CurrentUserId() userId: string,
+  ): Promise<SuccessResponse<BrandResponseDto>> {
+    const brand = await this.brandService.activate(id, userId);
+    return new SuccessResponse(
+      ResponseMessages.activated('Brand', brand.name),
+      brand,
     );
   }
 }
