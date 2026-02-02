@@ -534,6 +534,105 @@ export class ManufacturerService {
   }
 
   /**
+   * Bulk soft delete manufacturers
+   */
+  async bulkDelete(
+    manufacturerIds: string[],
+    adminId: string,
+    request: any,
+  ): Promise<{
+    deletedCount: number;
+    deletedManufacturers: string[];
+    failedDeletions: Array<{ name: string; reason: string }>;
+  }> {
+    const manufacturers = await this.prisma.manufacturer.findMany({
+      where: {
+        id: { in: manufacturerIds },
+        deletedAt: null,
+      },
+      include: {
+        products: {
+          where: {
+            isActive: true,
+            deletedAt: null,
+          },
+          select: {
+            id: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    const deletedManufacturers: string[] = [];
+    const failedDeletions: Array<{ name: string; reason: string }> = [];
+
+    // Process each manufacturer
+    for (const manufacturer of manufacturers) {
+      try {
+        // Check if manufacturer has active products
+        if (manufacturer.products.length > 0) {
+          failedDeletions.push({
+            name: manufacturer.name,
+            reason: `Cannot delete manufacturer with ${manufacturer.products.length} active product(s). Please deactivate all products first.`,
+          });
+          continue;
+        }
+
+        // Soft delete the manufacturer
+        await this.prisma.manufacturer.update({
+          where: { id: manufacturer.id },
+          data: {
+            status: ManufacturerStatus.SUSPENDED,
+            updatedBy: adminId,
+            deletedBy: adminId,
+            deletedAt: new Date(),
+          },
+        });
+
+        // Log audit event for each deletion
+        await this.auditService.createAuditLog({
+          userId: adminId,
+          action: 'DELETE_MANUFACTURER',
+          resource: 'MANUFACTURER',
+          resourceId: manufacturer.id,
+          oldData: manufacturer,
+          ipAddress: request?.ip,
+          userAgent: request?.get('user-agent'),
+          metadata: {
+            manufacturerName: manufacturer.name,
+            bulkOperation: true,
+          },
+        });
+
+        deletedManufacturers.push(manufacturer.name);
+      } catch (error) {
+        failedDeletions.push({
+          name: manufacturer.name,
+          reason: `Failed to delete manufacturer: ${error.message}`,
+        });
+      }
+    }
+
+    // Handle case where some IDs don't exist
+    const foundIds = manufacturers.map((m) => m.id);
+    const notFoundIds = manufacturerIds.filter((id) => !foundIds.includes(id));
+
+    for (const id of notFoundIds) {
+      failedDeletions.push({
+        name: `Manufacturer ID: ${id}`,
+        reason: 'Manufacturer not found or already deleted',
+      });
+    }
+
+    return {
+      deletedCount: deletedManufacturers.length,
+      deletedManufacturers,
+      failedDeletions,
+    };
+  }
+
+  /**
    * Get manufacturer statistics
    */
   async getStats(): Promise<{

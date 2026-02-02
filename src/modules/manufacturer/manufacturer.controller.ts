@@ -27,6 +27,7 @@ import { ManufacturerService } from './manufacturer.service';
 import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { AuditLog } from '../../common/decorators/audit-log.decorator';
 import {
   CurrentUser,
   CurrentUserId,
@@ -45,6 +46,10 @@ import {
   ManufacturerResponseDto,
   ManufacturerStatsDto,
 } from './dto/manufacturer-response.dto';
+import {
+  BulkManufacturerOperationDto,
+  BulkOperationResultDto,
+} from './dto/bulk-manufacturer-operation.dto';
 
 @ApiTags('Manufacturers')
 @Controller('manufacturers')

@@ -256,7 +256,11 @@ export class ProductService {
         },
         include: {
           brand: {
-            select: { id: true, name: true },
+            select: {
+              id: true,
+              name: true,
+              manufacturer: { select: { name: true, id: true } },
+            },
           },
           variant: {
             select: { id: true, name: true, description: true },
@@ -358,7 +362,11 @@ export class ProductService {
     const include = includeRelations
       ? {
           brand: {
-            select: { id: true, name: true },
+            select: {
+              id: true,
+              name: true,
+              manufacturer: { select: { name: true, id: true } },
+            },
           },
           variant: {
             select: { id: true, name: true, description: true },
@@ -410,7 +418,11 @@ export class ProductService {
       where: { id, deletedAt: null },
       include: {
         brand: {
-          select: { id: true, name: true },
+          select: {
+            id: true,
+            name: true,
+            manufacturer: { select: { name: true, id: true } },
+          },
         },
         variant: {
           select: { id: true, name: true, description: true },
@@ -546,7 +558,11 @@ export class ProductService {
         },
         include: {
           brand: {
-            select: { id: true, name: true },
+            select: {
+              id: true,
+              name: true,
+              manufacturer: { select: { name: true, id: true } },
+            },
           },
           variant: {
             select: { id: true, name: true, description: true },
@@ -734,7 +750,11 @@ export class ProductService {
       },
       include: {
         brand: {
-          select: { id: true, name: true },
+          select: {
+            id: true,
+            name: true,
+            manufacturer: { select: { name: true, id: true } },
+          },
         },
         variant: {
           select: { id: true, name: true, description: true },
@@ -794,7 +814,11 @@ export class ProductService {
       },
       include: {
         brand: {
-          select: { id: true, name: true },
+          select: {
+            id: true,
+            name: true,
+            manufacturer: { select: { name: true, id: true } },
+          },
         },
         variant: {
           select: { id: true, name: true, description: true },

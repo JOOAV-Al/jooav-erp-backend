@@ -37,6 +37,8 @@ import {
   BrandQueryDto,
   BrandResponseDto,
   BrandStatsDto,
+  BulkBrandOperationDto,
+  BulkBrandOperationResultDto,
 } from './dto';
 import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -51,7 +53,7 @@ import { BaseResponse } from '../../common/dto/base-response.dto';
 import { SuccessResponse } from '../../common/dto/api-response.dto';
 import { ResponseMessages } from '../../common/utils/response-messages.util';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { UserRole } from '../../common/enums';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('Brands')
 @Controller('brands')
@@ -133,6 +135,9 @@ export class BrandController {
   })
   async findAll(
     @Query() query: BrandQueryDto,
+    @Query('includeManufacturer') includeManufacturer?: boolean,
+    @Query('includeProducts') includeProducts?: boolean,
+    @Query('includeAuditInfo') includeAuditInfo?: boolean,
   ): Promise<SuccessResponse<PaginatedResponse<BrandResponseDto>>> {
     const result = await this.brandService.findAll(query, {
       includeManufacturer: true,
