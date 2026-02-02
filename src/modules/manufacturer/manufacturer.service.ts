@@ -545,7 +545,7 @@ export class ManufacturerService {
     deletedManufacturers: string[];
     failedDeletions: Array<{ name: string; reason: string }>;
   }> {
-    const manufacturers = await this.prisma.manufacturer.findMany({
+    const manufacturers = (await this.prisma.manufacturer.findMany({
       where: {
         id: { in: manufacturerIds },
         deletedAt: null,
@@ -562,7 +562,7 @@ export class ManufacturerService {
           },
         },
       },
-    }) as Array<{
+    })) as Array<{
       id: string;
       name: string;
       description: string | null;
