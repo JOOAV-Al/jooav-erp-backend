@@ -171,15 +171,20 @@ export class CategoryController {
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @ApiBearerAuth('admin-access-token')
   @AuditLog({ action: 'UPDATE', resource: 'category' })
-  @ApiOperation({ summary: 'Update a category' })
+  @ApiOperation({
+    summary: 'Update a category and manage its subcategories',
+    description:
+      'Update category details and perform subcategory operations (create, update, delete) in a single transaction',
+  })
   @ApiParam({
     name: 'id',
     description: 'Category ID',
-    example: '',
+    example: 'c1234567890abcdef12345678',
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Category updated successfully',
+    description:
+      'Category updated successfully with subcategory operations completed',
     type: CategoryResponseDto,
   })
   @ApiResponse({
@@ -188,7 +193,32 @@ export class CategoryController {
   })
   @ApiResponse({
     status: HttpStatus.CONFLICT,
-    description: 'Category with this name already exists',
+    description: 'Category or subcategory name conflicts',
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description:
+      'Invalid subcategory operations (e.g., trying to delete subcategory with products without force flag)',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        errors: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'List of specific operation errors',
+        },
+        summary: {
+          type: 'object',
+          properties: {
+            created: { type: 'number' },
+            updated: { type: 'number' },
+            deleted: { type: 'number' },
+            productsReassigned: { type: 'number' },
+          },
+        },
+      },
+    },
   })
   async update(
     @Param('id') id: string,
