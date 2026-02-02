@@ -161,49 +161,57 @@ async function main() {
     }),
     prisma.category.create({
       data: {
-        name: 'Instant Noodles',
-        description: 'Quick cooking noodles',
-        slug: 'instant-noodles',
-        parentId: null, // Will be set after creating the parent
+        name: 'Personal Care',
+        description: 'Personal care and hygiene products',
+        slug: 'personal-care',
         createdBy: superAdmin.id,
         updatedBy: superAdmin.id,
       },
     }),
     prisma.category.create({
       data: {
-        name: 'Soft Drinks',
-        description: 'Carbonated and non-carbonated drinks',
-        slug: 'soft-drinks',
-        parentId: null, // Will be set after creating the parent
-        createdBy: superAdmin.id,
-        updatedBy: superAdmin.id,
-      },
-    }),
-    prisma.category.create({
-      data: {
-        name: 'Dairy Products',
-        description: 'Milk and dairy products',
-        slug: 'dairy-products',
-        parentId: null, // Will be set after creating the parent
+        name: 'Household Items',
+        description: 'Household and cleaning products',
+        slug: 'household-items',
         createdBy: superAdmin.id,
         updatedBy: superAdmin.id,
       },
     }),
   ]);
 
-  // Update subcategories with parent
-  await prisma.category.update({
-    where: { id: categories[1].id },
-    data: { parentId: categories[0].id },
-  });
-  await prisma.category.update({
-    where: { id: categories[2].id },
-    data: { parentId: categories[0].id },
-  });
-  await prisma.category.update({
-    where: { id: categories[3].id },
-    data: { parentId: categories[0].id },
-  });
+  // Create subcategories
+  const subcategories = await Promise.all([
+    prisma.subcategory.create({
+      data: {
+        name: 'Instant Noodles',
+        description: 'Quick cooking noodles',
+        slug: 'instant-noodles',
+        categoryId: categories[0].id, // Food & Beverages
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.subcategory.create({
+      data: {
+        name: 'Soft Drinks',
+        description: 'Carbonated and non-carbonated drinks',
+        slug: 'soft-drinks',
+        categoryId: categories[0].id, // Food & Beverages
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+    prisma.subcategory.create({
+      data: {
+        name: 'Dairy Products',
+        description: 'Milk and dairy products',
+        slug: 'dairy-products',
+        categoryId: categories[0].id, // Food & Beverages
+        createdBy: superAdmin.id,
+        updatedBy: superAdmin.id,
+      },
+    }),
+  ]);
 
   // Create sample brands
   const brands = await Promise.all([
@@ -440,9 +448,9 @@ async function main() {
         brandId: brands[0].id,
         variantId: variants[0].id,
         manufacturerId: manufacturers[0].id,
-        categoryId:
-          categories.find((c) => c.name === 'Instant Noodles')?.id ||
-          categories[0].id,
+        subcategoryId:
+          subcategories.find((c) => c.name === 'Instant Noodles')?.id ||
+          subcategories[0].id,
         packSizeId: packSizes[0].id, // 70g
         packTypeId: packTypes[0].id, // Single Pack
         price: 120.0,
@@ -462,9 +470,9 @@ async function main() {
         brandId: brands[0].id,
         variantId: variants[0].id,
         manufacturerId: manufacturers[0].id,
-        categoryId:
-          categories.find((c) => c.name === 'Instant Noodles')?.id ||
-          categories[0].id,
+        subcategoryId:
+          subcategories.find((c) => c.name === 'Instant Noodles')?.id ||
+          subcategories[0].id,
         packSizeId: packSizes[1].id, // 120g
         packTypeId: packTypes[1].id, // Twin Pack
         price: 220.0,
@@ -484,9 +492,9 @@ async function main() {
         brandId: brands[0].id,
         variantId: variants[0].id,
         manufacturerId: manufacturers[0].id,
-        categoryId:
-          categories.find((c) => c.name === 'Instant Noodles')?.id ||
-          categories[0].id,
+        subcategoryId:
+          subcategories.find((c) => c.name === 'Instant Noodles')?.id ||
+          subcategories[0].id,
         packSizeId: packSizes[2].id, // 200g
         packTypeId: packTypes[2].id, // Family Pack
         price: 350.0,
@@ -507,9 +515,9 @@ async function main() {
         brandId: brands[1].id,
         variantId: variants[1].id,
         manufacturerId: manufacturers[1].id,
-        categoryId:
-          categories.find((c) => c.name === 'Soft Drinks')?.id ||
-          categories[0].id,
+        subcategoryId:
+          subcategories.find((c) => c.name === 'Soft Drinks')?.id ||
+          subcategories[1].id,
         packSizeId: packSizes[3].id, // 350ml
         packTypeId: packTypes[3].id, // Glass Bottle
         price: 180.0,
@@ -528,9 +536,9 @@ async function main() {
         brandId: brands[1].id,
         variantId: variants[1].id,
         manufacturerId: manufacturers[1].id,
-        categoryId:
-          categories.find((c) => c.name === 'Soft Drinks')?.id ||
-          categories[0].id,
+        subcategoryId:
+          subcategories.find((c) => c.name === 'Soft Drinks')?.id ||
+          subcategories[0].id,
         packSizeId: packSizes[4].id, // 500ml
         packTypeId: packTypes[4].id, // PET Bottle
         price: 200.0,
@@ -549,9 +557,9 @@ async function main() {
         brandId: brands[1].id,
         variantId: variants[1].id,
         manufacturerId: manufacturers[1].id,
-        categoryId:
-          categories.find((c) => c.name === 'Soft Drinks')?.id ||
-          categories[0].id,
+        subcategoryId:
+          subcategories.find((c) => c.name === 'Soft Drinks')?.id ||
+          subcategories[0].id,
         packSizeId: packSizes[5].id, // 1.5L
         packTypeId: packTypes[4].id, // PET Bottle
         price: 450.0,
@@ -572,9 +580,9 @@ async function main() {
         brandId: brands[2].id,
         variantId: variants[2].id,
         manufacturerId: manufacturers[0].id,
-        categoryId:
-          categories.find((c) => c.name === 'Dairy Products')?.id ||
-          categories[2].id,
+        subcategoryId:
+          subcategories.find((c) => c.name === 'Dairy Products')?.id ||
+          subcategories[2].id,
         packSizeId: packSizes[6].id, // 400g
         packTypeId: packTypes[6].id, // Tin
         price: 1500.0,
@@ -594,9 +602,9 @@ async function main() {
         brandId: brands[2].id,
         variantId: variants[2].id,
         manufacturerId: manufacturers[0].id,
-        categoryId:
-          categories.find((c) => c.name === 'Dairy Products')?.id ||
-          categories[2].id,
+        subcategoryId:
+          subcategories.find((c) => c.name === 'Dairy Products')?.id ||
+          subcategories[2].id,
         packSizeId: packSizes[7].id, // 900g
         packTypeId: packTypes[7].id, // Pouch
         price: 3200.0,
@@ -615,9 +623,9 @@ async function main() {
         brandId: brands[2].id,
         variantId: variants[2].id,
         manufacturerId: manufacturers[0].id,
-        categoryId:
-          categories.find((c) => c.name === 'Dairy Products')?.id ||
-          categories[2].id,
+        subcategoryId:
+          subcategories.find((c) => c.name === 'Dairy Products')?.id ||
+          subcategories[2].id,
         packSizeId: packSizes[8].id, // 1.8kg
         packTypeId: packTypes[8].id, // Carton
         price: 6000.0,

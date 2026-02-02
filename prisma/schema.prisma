@@ -61,6 +61,9 @@ model User {
   createdCategories    Category[]         @relation("CreatedCategories")
   updatedCategories    Category[]         @relation("UpdatedCategories")
   deletedCategories    Category[]         @relation("DeletedCategories")
+  createdSubcategories Subcategory[]      @relation("CreatedSubcategories")
+  updatedSubcategories Subcategory[]      @relation("UpdatedSubcategories")
+  deletedSubcategories Subcategory[]      @relation("DeletedSubcategories")
   createdProducts      Product[]          @relation("CreatedProducts")
   updatedProducts      Product[]          @relation("UpdatedProducts")
   deletedProducts      Product[]          @relation("DeletedProducts")
@@ -146,32 +149,55 @@ model UserActivity {
 // ================================
 
 model Category {
-  id          String        @id @default(cuid())
-  name        String
-  slug        String        @unique // URL-friendly name
+  id          String         @id @default(cuid())
+  name        String         @unique
+  slug        String         @unique // URL-friendly name
   description String?
-  
-  parentId    String?       // For subcategories
-  isActive    Boolean       @default(true)
-  sortOrder   Int           @default(0) // Display order
+  status      CategoryStatus @default(ACTIVE)
   
   // Audit fields
   createdBy   String
   updatedBy   String
   deletedBy   String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
   deletedAt   DateTime?
   
   // Relations
-  parent          Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children        Category[] @relation("CategoryHierarchy")
-  products        Product[]  // Products under this category
-  createdByUser   User       @relation("CreatedCategories", fields: [createdBy], references: [id])
-  updatedByUser   User       @relation("UpdatedCategories", fields: [updatedBy], references: [id])
-  deletedByUser   User?      @relation("DeletedCategories", fields: [deletedBy], references: [id])
+  subcategories   Subcategory[] @relation("CategorySubcategories")
+  createdByUser   User          @relation("CreatedCategories", fields: [createdBy], references: [id])
+  updatedByUser   User          @relation("UpdatedCategories", fields: [updatedBy], references: [id])
+  deletedByUser   User?         @relation("DeletedCategories", fields: [deletedBy], references: [id])
   
   @@map("categories")
+}
+
+model Subcategory {
+  id          String             @id @default(cuid())
+  name        String             
+  slug        String             @unique // URL-friendly name
+  description String?
+  categoryId  String
+  status      SubcategoryStatus  @default(ACTIVE)
+  
+  // Audit fields  
+  createdBy   String
+  updatedBy   String
+  deletedBy   String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  deletedAt   DateTime?
+  
+  // Relations
+  category      Category  @relation("CategorySubcategories", fields: [categoryId], references: [id])
+  products      Product[] @relation("SubcategoryProducts")
+  createdByUser User      @relation("CreatedSubcategories", fields: [createdBy], references: [id])
+  updatedByUser User      @relation("UpdatedSubcategories", fields: [updatedBy], references: [id])
+  deletedByUser User?     @relation("DeletedSubcategories", fields: [deletedBy], references: [id])
+
+  // Prevent duplicate subcategory names within same category
+  @@unique([categoryId, name])
+  @@map("subcategories")
 }
 
 model Variant {
@@ -263,7 +289,7 @@ model Product {
   // Product Classification & Relations
   brandId         String
   variantId       String        // Links to Variant entity
-  categoryId      String        // Links to Category (can be subcategory)
+  subcategoryId   String?       // Links to Subcategory (optional)
   manufacturerId  String        // Links to Manufacturer
   packSizeId      String        // Links to PackSize entity
   packTypeId      String        // Links to PackType entity
@@ -290,7 +316,7 @@ model Product {
   // Relations
   brand           Brand         @relation("BrandProducts", fields: [brandId], references: [id])
   variant         Variant       @relation("VariantProducts", fields: [variantId], references: [id])
-  category        Category      @relation(fields: [categoryId], references: [id])
+  subcategory     Subcategory?  @relation("SubcategoryProducts", fields: [subcategoryId], references: [id])
   manufacturer    Manufacturer  @relation("ManufacturerProducts", fields: [manufacturerId], references: [id])
   packSize        PackSize      @relation("PackSizeProducts", fields: [packSizeId], references: [id])
   packType        PackType      @relation("PackTypeProducts", fields: [packTypeId], references: [id])
@@ -817,6 +843,18 @@ enum BrandStatus {
   ACTIVE
   INACTIVE
   DISCONTINUED
+}
+
+enum CategoryStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum SubcategoryStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
 }
 
 enum SMEVerificationStatus {

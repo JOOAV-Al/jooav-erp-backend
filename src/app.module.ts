@@ -48,6 +48,7 @@ import { ManufacturerModule } from './modules/manufacturer/manufacturer.module';
 import { BrandModule } from './modules/brand/brand.module';
 import { VariantModule } from './modules/variant/variant.module';
 import { CategoryModule } from './modules/category/category.module';
+import { SubcategoryModule } from './modules/subcategory/subcategory.module';
 import { ProductModule } from './modules/product/product.module';
 import { PackSizeModule } from './modules/pack-size/pack-size.module';
 import { PackTypeModule } from './modules/pack-type/pack-type.module';
@@ -114,6 +115,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
     BrandModule,
     VariantModule,
     CategoryModule,
+    SubcategoryModule,
     ProductModule,
     PackSizeModule,
     PackTypeModule,
