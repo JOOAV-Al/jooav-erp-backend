@@ -95,21 +95,21 @@ export class ProductService {
    */
   private async validateReferences(
     brandId: string,
-    categoryId: string,
+    subcategoryId: string,
   ): Promise<{ manufacturerId: string }> {
-    const [brand, category] = await Promise.all([
+    const [brand, subcategory] = await Promise.all([
       this.prisma.brand.findUnique({
         where: { id: brandId },
         select: { id: true, manufacturerId: true },
       }),
-      this.prisma.category.findUnique({ where: { id: categoryId } }),
+      this.prisma.subcategory.findUnique({ where: { id: subcategoryId } }),
     ]);
 
     if (!brand) {
       throw new BadRequestException('Brand not found');
     }
-    if (!category) {
-      throw new BadRequestException('Category not found');
+    if (!subcategory) {
+      throw new BadRequestException('Subcategory not found');
     }
 
     return { manufacturerId: brand.manufacturerId };
@@ -185,7 +185,7 @@ export class ProductService {
   ): Promise<ProductResponseDto> {
     const {
       brandId,
-      categoryId,
+      subcategoryId,
       variantId,
       packSizeId,
       packTypeId,
@@ -194,7 +194,7 @@ export class ProductService {
     } = createProductDto;
 
     // Validate references and get manufacturerId from brand
-    const validation = await this.validateReferences(brandId, categoryId);
+    const validation = await this.validateReferences(brandId, subcategoryId);
     const manufacturerId = validation.manufacturerId;
 
     // Validate that variant exists and belongs to the specified brand
@@ -244,7 +244,7 @@ export class ProductService {
           sku,
           // barcode field removed from schema but generation kept for future
           brandId,
-          categoryId,
+          subcategoryId,
           manufacturerId,
           variantId,
           packSizeId,
@@ -261,13 +261,12 @@ export class ProductService {
           variant: {
             select: { id: true, name: true, description: true },
           },
-          category: {
+          subcategory: {
             select: {
               id: true,
               name: true,
               slug: true,
-
-              parent: {
+              category: {
                 select: { id: true, name: true, slug: true },
               },
             },
@@ -294,14 +293,18 @@ export class ProductService {
           productName: name,
           sku,
           brand: product.brand.name,
-          category: product.category.name,
+          subcategory: product.subcategory?.name,
+          category: product.subcategory?.category.name,
         },
       });
 
       // Invalidate product caches
       await this.cacheInvalidationService.invalidateProducts();
 
-      return product;
+      return {
+        ...product,
+        subcategoryId: product.subcategoryId || undefined,
+      };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -360,13 +363,12 @@ export class ProductService {
           variant: {
             select: { id: true, name: true, description: true },
           },
-          category: {
+          subcategory: {
             select: {
               id: true,
               name: true,
               slug: true,
-
-              parent: {
+              category: {
                 select: { id: true, name: true, slug: true },
               },
             },
@@ -383,7 +385,7 @@ export class ProductService {
         }
       : undefined;
 
-    const [products, total] = await Promise.all([
+    const [rawProducts, total] = await Promise.all([
       this.prisma.product.findMany({
         where,
         include,
@@ -393,6 +395,12 @@ export class ProductService {
       }),
       this.prisma.product.count({ where }),
     ]);
+
+    // Transform products to handle null to undefined conversion for optional fields
+    const products = rawProducts.map((product) => ({
+      ...product,
+      subcategoryId: product.subcategoryId || undefined,
+    }));
 
     return new PaginatedResponse(products, page, limit, total);
   }
@@ -407,13 +415,12 @@ export class ProductService {
         variant: {
           select: { id: true, name: true, description: true },
         },
-        category: {
+        subcategory: {
           select: {
             id: true,
             name: true,
             slug: true,
-
-            parent: {
+            category: {
               select: { id: true, name: true, slug: true },
             },
           },
@@ -434,7 +441,10 @@ export class ProductService {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    return product;
+    return {
+      ...product,
+      subcategoryId: product.subcategoryId || undefined,
+    };
   }
 
   async update(
@@ -451,8 +461,14 @@ export class ProductService {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    const { brandId, categoryId, variantId, packSizeId, packTypeId, ...rest } =
-      updateProductDto;
+    const {
+      brandId,
+      subcategoryId,
+      variantId,
+      packSizeId,
+      packTypeId,
+      ...rest
+    } = updateProductDto;
 
     let name: string | undefined;
     let sku: string | undefined;
@@ -466,13 +482,17 @@ export class ProductService {
       const finalPackTypeId = packTypeId || existingProduct.packTypeId;
 
       // Validate references if changed and get manufacturerId from brand if brandId is provided
-      if (brandId || categoryId) {
-        const validation = await this.validateReferences(
-          brandId || existingProduct.brandId,
-          categoryId || existingProduct.categoryId,
-        );
-        if (brandId) {
-          manufacturerId = validation.manufacturerId;
+      if (brandId || subcategoryId) {
+        const finalSubcategoryId =
+          subcategoryId || existingProduct.subcategoryId;
+        if (finalSubcategoryId) {
+          const validation = await this.validateReferences(
+            finalBrandId,
+            finalSubcategoryId,
+          );
+          if (brandId) {
+            manufacturerId = validation.manufacturerId;
+          }
         }
       }
 
@@ -531,12 +551,12 @@ export class ProductService {
           variant: {
             select: { id: true, name: true, description: true },
           },
-          category: {
+          subcategory: {
             select: {
               id: true,
               name: true,
               slug: true,
-              parent: {
+              category: {
                 select: { id: true, name: true, slug: true },
               },
             },
@@ -569,7 +589,10 @@ export class ProductService {
       // Invalidate product caches
       await this.cacheInvalidationService.invalidateProduct(id);
 
-      return product;
+      return {
+        ...product,
+        subcategoryId: product.subcategoryId || undefined,
+      };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -626,7 +649,7 @@ export class ProductService {
       include: {
         brand: { select: { id: true, name: true, deletedAt: true } },
         variant: { select: { id: true, name: true, deletedAt: true } },
-        category: { select: { id: true, name: true, deletedAt: true } },
+        subcategory: { select: { id: true, name: true, deletedAt: true } },
         manufacturer: { select: { id: true, name: true, deletedAt: true } },
         packSize: { select: { id: true, name: true, status: true } },
         packType: { select: { id: true, name: true, status: true } },
@@ -661,9 +684,9 @@ export class ProductService {
         );
       }
 
-      if (product.category && product.category.deletedAt) {
+      if (product.subcategory && product.subcategory.deletedAt) {
         throw new BadRequestException(
-          'Cannot reactivate product because its category is deleted. Reactivate the category first.',
+          'Cannot reactivate product because its subcategory is deleted. Reactivate the subcategory first.',
         );
       }
 
@@ -716,12 +739,12 @@ export class ProductService {
         variant: {
           select: { id: true, name: true, description: true },
         },
-        category: {
+        subcategory: {
           select: {
             id: true,
             name: true,
             slug: true,
-            parent: {
+            category: {
               select: { id: true, name: true, slug: true },
             },
           },
@@ -754,7 +777,10 @@ export class ProductService {
     // Invalidate product caches
     await this.cacheInvalidationService.invalidateProduct(id);
 
-    return updatedProduct;
+    return {
+      ...updatedProduct,
+      subcategoryId: updatedProduct.subcategoryId || undefined,
+    };
   }
 
   async deactivate(id: string, userId: string): Promise<ProductResponseDto> {
@@ -773,12 +799,12 @@ export class ProductService {
         variant: {
           select: { id: true, name: true, description: true },
         },
-        category: {
+        subcategory: {
           select: {
             id: true,
             name: true,
             slug: true,
-            parent: {
+            category: {
               select: { id: true, name: true, slug: true },
             },
           },
@@ -810,6 +836,9 @@ export class ProductService {
     // Invalidate product caches
     await this.cacheInvalidationService.invalidateProduct(id);
 
-    return updatedProduct;
+    return {
+      ...updatedProduct,
+      subcategoryId: updatedProduct.subcategoryId || undefined,
+    };
   }
 }

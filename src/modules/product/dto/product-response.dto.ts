@@ -44,10 +44,11 @@ export class ProductResponseDto {
   brandId: string;
 
   @ApiProperty({
-    description: 'Category ID',
+    description: 'Subcategory ID',
     example: 'cm123def-1234-5678-90ab-123456789def',
+    required: false,
   })
-  categoryId: string;
+  subcategoryId?: string;
 
   @ApiProperty({
     description: 'Manufacturer ID',
