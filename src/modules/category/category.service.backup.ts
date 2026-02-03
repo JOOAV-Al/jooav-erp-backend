@@ -43,99 +43,95 @@ export class CategoryService {
     return StringUtils.titleCase(name.trim());
   }
 
-  /**
-   * Generate unique slug within transaction context
-   */
-  private async generateUniqueSlug(
-    baseSlug: string,
-    tx: any,
-    excludeId?: string,
-  ): Promise<string> {
-    const existingSlugs = await tx.category.findMany({
-      where: {
-        slug: { startsWith: baseSlug },
-        deletedAt: null,
-        ...(excludeId && { id: { not: excludeId } }),
-      },
-      select: { slug: true },
-    });
-
-    const existingSlugSet = new Set(existingSlugs.map((c: any) => c.slug));
-
-    if (!existingSlugSet.has(baseSlug)) {
-      return baseSlug;
-    }
-
-    let counter = 1;
-    let uniqueSlug = `${baseSlug}-${counter}`;
-    while (existingSlugSet.has(uniqueSlug)) {
-      counter++;
-      uniqueSlug = `${baseSlug}-${counter}`;
-
-      if (counter > 999) {
-        throw new BadRequestException(
-          'Unable to generate unique slug. Please use a different name.',
-        );
-      }
-    }
-
-    return uniqueSlug;
-  }
-
-  /**
-   * Generate unique subcategory slug within transaction context
-   */
-  private async generateUniqueSubcategorySlug(
-    baseSlug: string,
-    tx: any,
-    usedSlugs: Set<string> = new Set(),
-  ): Promise<string> {
-    const existingSlugs = await tx.subcategory.findMany({
-      where: {
-        slug: { startsWith: baseSlug },
-        deletedAt: null,
-      },
-      select: { slug: true },
-    });
-
-    const allUsedSlugs = new Set([
-      ...existingSlugs.map((s: any) => s.slug),
-      ...usedSlugs,
-    ]);
-
-    if (!allUsedSlugs.has(baseSlug)) {
-      usedSlugs.add(baseSlug);
-      return baseSlug;
-    }
-
-    let counter = 1;
-    let uniqueSlug = `${baseSlug}-${counter}`;
-    while (allUsedSlugs.has(uniqueSlug)) {
-      counter++;
-      uniqueSlug = `${baseSlug}-${counter}`;
-
-      if (counter > 999) {
-        throw new BadRequestException(
-          `Unable to generate unique slug for subcategory. Please use a different name.`,
-        );
-      }
-    }
-
-    usedSlugs.add(uniqueSlug);
-    return uniqueSlug;
-  }
-
   async create(
     createCategoryDto: CreateCategoryDto,
     userId: string,
   ): Promise<CategoryResponseDto> {
     const { name, description, subcategories = [] } = createCategoryDto;
 
-    // Sanitize and validate input
+    // Sanitize and validate
     const sanitizedName = this.sanitizeCategoryName(name);
-    const baseSlug = this.generateSlug(sanitizedName);
+    let slug = this.generateSlug(sanitizedName);
 
-    // Validate subcategory names for duplicates within the input
+    // Check for name conflicts with existing active categories first
+    const existingCategoryByName = await this.prisma.category.findFirst({
+      where: {
+        name: { equals: sanitizedName, mode: 'insensitive' },
+        deletedAt: null,
+      },
+    });
+
+    if (existingCategoryByName) {
+      throw new ConflictException(
+        `Category with name "${sanitizedName}" already exists`,
+      );
+    }
+
+    // Handle slug conflicts by appending counter if needed
+    let counter = 1;
+    let finalSlug = slug;
+    
+    while (true) {
+      const existingCategoryBySlug = await this.prisma.category.findFirst({
+        where: {
+          slug: finalSlug,
+          deletedAt: null,
+        },
+      });
+
+      if (!existingCategoryBySlug) {
+        break; // Found a unique slug
+      }
+
+      // Generate new slug with counter
+      finalSlug = `${slug}-${counter}`;
+      counter++;
+
+      // Prevent infinite loop (safety check)
+      if (counter > 100) {
+        throw new BadRequestException(
+          'Unable to generate unique slug for category. Please use a different name.',
+        );
+      }
+    }
+
+    // Pre-generate unique slugs for subcategories outside transaction
+    const subcategorySlugs: Array<{ name: string; slug: string; description?: string }> = [];
+    if (subcategories.length > 0) {
+      for (const subcat of subcategories) {
+        const baseSubSlug = StringUtils.slugify(subcat.name);
+        let subSlug = baseSubSlug;
+        let subCounter = 1;
+        
+        while (true) {
+          const existingSubcategoryBySlug = await this.prisma.subcategory.findFirst({
+            where: {
+              slug: subSlug,
+              deletedAt: null,
+            },
+          });
+
+          if (!existingSubcategoryBySlug) {
+            break; // Found unique slug
+          }
+
+          subSlug = `${baseSubSlug}-${subCounter}`;
+          subCounter++;
+
+          if (subCounter > 100) {
+            throw new BadRequestException(
+              `Unable to generate unique slug for subcategory "${subcat.name}". Please use a different name.`,
+            );
+          }
+        }
+
+        subcategorySlugs.push({
+          name: StringUtils.titleCase(subcat.name.trim()),
+          slug: subSlug,
+          description: subcat.description?.trim(),
+        });
+      }
+    }    // Validate subcategory names for duplicates within the input
     if (subcategories.length > 0) {
       const subcategoryNames = subcategories.map((sub) =>
         sub.name.trim().toLowerCase(),
@@ -149,101 +145,107 @@ export class CategoryService {
           `Duplicate subcategory names found: ${duplicateNames.join(', ')}`,
         );
       }
-    }
 
-    // Create category and subcategories in a single atomic transaction
-    const result = await this.prisma.$transaction(async (tx) => {
-      // Check for duplicate category name
-      const existingCategory = await tx.category.findFirst({
+      // Check for conflicts with existing subcategories
+      const existingSubcategories = await this.prisma.subcategory.findMany({
         where: {
-          name: { equals: sanitizedName, mode: 'insensitive' },
+          name: {
+            in: subcategoryNames,
+            mode: 'insensitive',
+          },
           deletedAt: null,
         },
+        select: { name: true },
       });
 
-      if (existingCategory) {
+      if (existingSubcategories.length > 0) {
         throw new ConflictException(
-          `Category with name "${sanitizedName}" already exists`,
+          `Subcategory names already exist: ${existingSubcategories.map((s) => s.name).join(', ')}`,
         );
       }
+    }
 
-      // Check for existing subcategory names
-      if (subcategories.length > 0) {
-        const subcategoryNames = subcategories.map((sub) =>
-          StringUtils.titleCase(sub.name.trim()),
-        );
-        const existingSubcategories = await tx.subcategory.findMany({
-          where: {
-            name: {
-              in: subcategoryNames,
-              mode: 'insensitive',
-            },
-            deletedAt: null,
-          },
-          select: { name: true },
-        });
+    // Use transaction with retry mechanism to handle race conditions
+    let result: any;
+    let transactionAttempt = 0;
+    const maxTransactionAttempts = 5;
 
-        if (existingSubcategories.length > 0) {
-          throw new ConflictException(
-            `Subcategory names already exist: ${existingSubcategories.map((s) => s.name).join(', ')}`,
-          );
-        }
-      }
-
-      // Generate unique slug for category
-      const finalSlug = await this.generateUniqueSlug(baseSlug, tx);
-
-      // Create the category
-      const category = await tx.category.create({
-        data: {
-          name: sanitizedName,
-          slug: finalSlug,
-          description: description?.trim(),
-          createdBy: userId,
-          updatedBy: userId,
-        },
-      });
-
-      // Create subcategories with unique slugs
-      const createdSubcategories: any[] = [];
-      if (subcategories.length > 0) {
-        const usedSlugs = new Set<string>();
-
-        for (const subcat of subcategories) {
-          const subcategoryName = StringUtils.titleCase(subcat.name.trim());
-          const baseSubSlug = StringUtils.slugify(subcategoryName);
-
-          const uniqueSubSlug = await this.generateUniqueSubcategorySlug(
-            baseSubSlug,
-            tx,
-            usedSlugs,
-          );
-
-          const createdSubcategory = await tx.subcategory.create({
+    while (transactionAttempt < maxTransactionAttempts) {
+      try {
+        result = await this.prisma.$transaction(async (tx) => {
+          // Create the category with pre-validated unique slug
+          const category = await tx.category.create({
             data: {
-              name: subcategoryName,
-              slug: uniqueSubSlug,
-              description: subcat.description?.trim(),
-              categoryId: category.id,
+              name: sanitizedName,
+              slug: finalSlug,
+              description: description?.trim(),
               createdBy: userId,
               updatedBy: userId,
             },
-            include: {
-              _count: {
-                select: { products: { where: { deletedAt: null } } },
-              },
-            },
           });
-          createdSubcategories.push(createdSubcategory);
-        }
-      }
 
-      return {
-        ...category,
-        subcategories: createdSubcategories,
-        _count: { subcategories: createdSubcategories.length },
-      };
-    });
+          // Create subcategories with pre-validated unique slugs
+          const createdSubcategories: any[] = [];
+          for (const subcatData of subcategorySlugs) {
+            const createdSubcategory = await tx.subcategory.create({
+              data: {
+                name: subcatData.name,
+                slug: subcatData.slug,
+                description: subcatData.description,
+                categoryId: category.id,
+                createdBy: userId,
+                updatedBy: userId,
+              },
+              include: {
+                _count: {
+                  select: { products: { where: { deletedAt: null } } },
+                },
+              },
+            });
+            createdSubcategories.push(createdSubcategory);
+          }
+
+          // Return the category with its subcategories
+          return {
+            ...category,
+            subcategories: createdSubcategories,
+            _count: { subcategories: createdSubcategories.length },
+          };
+        });
+        
+        break; // Transaction succeeded, exit retry loop
+        
+      } catch (error: any) {
+        // If it's a unique constraint error on slug, regenerate slug and retry
+        if (error?.code === 'P2002' && 
+            (Array.isArray(error?.meta?.target) 
+              ? error.meta.target.includes('slug') 
+              : String(error?.meta?.target).includes('slug'))) {
+          
+          transactionAttempt++;
+          
+          if (transactionAttempt >= maxTransactionAttempts) {
+            throw new BadRequestException(
+              'Unable to create category due to slug conflicts. Please try again with a different name.'
+            );
+          }
+          
+          // Regenerate unique slug for retry
+          finalSlug = `${slug}-${counter + transactionAttempt}`;
+          
+          // Regenerate subcategory slugs too
+          for (let i = 0; i < subcategorySlugs.length; i++) {
+            const originalSlug = StringUtils.slugify(subcategories[i].name);
+            subcategorySlugs[i].slug = `${originalSlug}-${transactionAttempt}`;
+          }
+          
+          continue; // Retry transaction
+        }
+        
+        // For any other error, throw it immediately
+        throw error;
+      }
+    }
 
     // Log audit trail for category creation
     await this.auditService.createAuditLog({
@@ -636,7 +638,7 @@ export class CategoryService {
         }
       }
 
-      // 3. Handle subcategory creation with clean slug generation
+      // 3. Handle subcategory creation
       if (createSubcategories.length > 0) {
         // Validate new subcategory names for duplicates within request and existing
         const newSubcategoryNames = createSubcategories.map((sub) =>
@@ -653,15 +655,11 @@ export class CategoryService {
         }
 
         // Check for conflicts with existing subcategories
-        const sanitizedNames = createSubcategories.map((sub) =>
-          StringUtils.titleCase(sub.name.trim()),
-        );
-
         const existingSubcategories = await tx.subcategory.findMany({
           where: {
             categoryId: id,
             name: {
-              in: sanitizedNames,
+              in: newSubcategoryNames,
               mode: 'insensitive',
             },
             deletedAt: null,
@@ -675,22 +673,13 @@ export class CategoryService {
           );
         }
 
-        // Create new subcategories with unique slugs
-        const usedSlugs = new Set<string>();
+        // Create new subcategories
         for (const subcat of createSubcategories) {
-          const subcategoryName = StringUtils.titleCase(subcat.name.trim());
-          const baseSlug = StringUtils.slugify(subcategoryName);
-
-          const uniqueSlug = await this.generateUniqueSubcategorySlug(
-            baseSlug,
-            tx,
-            usedSlugs,
-          );
-
+          const subcategorySlug = StringUtils.slugify(subcat.name);
           await tx.subcategory.create({
             data: {
-              name: subcategoryName,
-              slug: uniqueSlug,
+              name: StringUtils.titleCase(subcat.name.trim()),
+              slug: subcategorySlug,
               description: subcat.description?.trim(),
               categoryId: id,
               createdBy: userId,
@@ -758,6 +747,7 @@ export class CategoryService {
       );
     }
 
+    // Check for products in subcategories of this category
     // Check for products in subcategories of this category
     const subcategoryProductsCount = await this.prisma.product.count({
       where: {
