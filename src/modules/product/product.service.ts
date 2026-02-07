@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CacheInvalidationService } from '../cache/cache-invalidation.service';
+import { CloudinaryService } from '../storage/cloudinary.service';
 import {
   CreateProductDto,
   UpdateProductDto,
@@ -24,6 +25,7 @@ export class ProductService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditService,
     private readonly cacheInvalidationService: CacheInvalidationService,
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
   /**
@@ -190,6 +192,8 @@ export class ProductService {
       packSizeId,
       packTypeId,
       barcode: providedBarcode,
+      images,
+      thumbnail,
       ...rest
     } = createProductDto;
 
@@ -228,6 +232,41 @@ export class ProductService {
       }
     }
 
+    // Handle file uploads
+    let uploadedImageUrls: string[] = [];
+    let uploadedThumbnailUrl: string | undefined = undefined;
+
+    try {
+      // Upload images to Cloudinary
+      if (images && images.length > 0) {
+        const imageUploads = await this.cloudinaryService.uploadMultipleFiles(
+          images,
+          {
+            folder: 'products/images',
+            tags: ['product', 'image'],
+          },
+        );
+        uploadedImageUrls = imageUploads.map((upload) => upload.secureUrl);
+      }
+
+      // Upload thumbnail to Cloudinary
+      if (thumbnail) {
+        const thumbnailUpload = await this.cloudinaryService.uploadFile(
+          thumbnail.buffer,
+          {
+            folder: 'products/thumbnails',
+            tags: ['product', 'thumbnail'],
+            transformation: [
+              { width: 300, height: 300, crop: 'fill', quality: 'auto' },
+            ],
+          },
+        );
+        uploadedThumbnailUrl = thumbnailUpload.secureUrl;
+      }
+    } catch (error) {
+      throw new BadRequestException(`File upload failed: ${error.message}`);
+    }
+
     // Check if SKU already exists
     const existingProduct = await this.prisma.product.findUnique({
       where: { sku },
@@ -250,9 +289,10 @@ export class ProductService {
           packSizeId,
           packTypeId,
           ...rest,
+          images: uploadedImageUrls,
+          thumbnail: uploadedThumbnailUrl,
           createdBy: userId,
           updatedBy: userId,
-          images: rest.images || [],
         },
         include: {
           brand: {
@@ -479,6 +519,10 @@ export class ProductService {
       variantId,
       packSizeId,
       packTypeId,
+      createImages,
+      deleteImages,
+      thumbnail,
+      deleteThumbnail,
       ...rest
     } = updateProductDto;
 
@@ -546,6 +590,64 @@ export class ProductService {
       }
     }
 
+    // Handle image operations
+    let updatedImages = [...existingProduct.images] as string[];
+    let updatedThumbnail = existingProduct.thumbnail;
+
+    try {
+      // Delete specified images from Cloudinary and remove from array
+      if (deleteImages && deleteImages.length > 0) {
+        await this.cloudinaryService.deleteFilesByUrls(deleteImages);
+        updatedImages = updatedImages.filter(
+          (url) => !deleteImages.includes(url),
+        );
+      }
+
+      // Upload new images and add to array
+      if (createImages && createImages.length > 0) {
+        const imageUploads = await this.cloudinaryService.uploadMultipleFiles(
+          createImages,
+          {
+            folder: 'products/images',
+            tags: ['product', 'image'],
+          },
+        );
+        const newImageUrls = imageUploads.map((upload) => upload.secureUrl);
+        updatedImages = [...updatedImages, ...newImageUrls];
+      }
+
+      // Handle thumbnail operations
+      if (deleteThumbnail && existingProduct.thumbnail) {
+        await this.cloudinaryService.deleteFilesByUrls([
+          existingProduct.thumbnail,
+        ]);
+        updatedThumbnail = null;
+      }
+
+      if (thumbnail) {
+        // If there's an existing thumbnail and we're uploading a new one, delete the old one
+        if (existingProduct.thumbnail) {
+          await this.cloudinaryService.deleteFilesByUrls([
+            existingProduct.thumbnail,
+          ]);
+        }
+
+        const thumbnailUpload = await this.cloudinaryService.uploadFile(
+          thumbnail.buffer,
+          {
+            folder: 'products/thumbnails',
+            tags: ['product', 'thumbnail'],
+            transformation: [
+              { width: 300, height: 300, crop: 'fill', quality: 'auto' },
+            ],
+          },
+        );
+        updatedThumbnail = thumbnailUpload.secureUrl;
+      }
+    } catch (error) {
+      throw new BadRequestException(`File operation failed: ${error.message}`);
+    }
+
     try {
       const product = await this.prisma.product.update({
         where: { id },
@@ -554,6 +656,8 @@ export class ProductService {
           ...(sku && { sku }),
           ...(manufacturerId && { manufacturerId }),
           ...rest,
+          images: updatedImages,
+          thumbnail: updatedThumbnail,
           updatedBy: userId,
         },
         include: {

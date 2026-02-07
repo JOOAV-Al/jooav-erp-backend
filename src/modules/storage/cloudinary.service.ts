@@ -135,6 +135,60 @@ export class CloudinaryService {
   }
 
   /**
+   * Extract public ID from Cloudinary URL
+   */
+  extractPublicIdFromUrl(url: string): string {
+    try {
+      // Extract public ID from Cloudinary URL
+      // URL format: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/folder/public_id.jpg
+      const urlParts = url.split('/');
+      const uploadIndex = urlParts.findIndex((part) => part === 'upload');
+      if (uploadIndex === -1) return '';
+
+      // Get everything after version number (or 'upload' if no version)
+      let publicIdPart = urlParts.slice(uploadIndex + 1);
+
+      // Remove version if present (starts with 'v' followed by numbers)
+      if (
+        publicIdPart[0] &&
+        publicIdPart[0].startsWith('v') &&
+        /^v\d+$/.test(publicIdPart[0])
+      ) {
+        publicIdPart = publicIdPart.slice(1);
+      }
+
+      // Join the remaining parts and remove file extension
+      const publicIdWithExtension = publicIdPart.join('/');
+      const lastDotIndex = publicIdWithExtension.lastIndexOf('.');
+      return lastDotIndex > 0
+        ? publicIdWithExtension.substring(0, lastDotIndex)
+        : publicIdWithExtension;
+    } catch (error) {
+      this.logger.error(`Failed to extract public ID from URL: ${url}`, error);
+      return '';
+    }
+  }
+
+  /**
+   * Delete files by URLs
+   */
+  async deleteFilesByUrls(urls: string[]): Promise<any> {
+    try {
+      const publicIds = urls
+        .map((url) => this.extractPublicIdFromUrl(url))
+        .filter((id) => id);
+      if (publicIds.length === 0) {
+        this.logger.warn('No valid public IDs found from URLs');
+        return { deleted: {} };
+      }
+      return this.deleteMultipleFiles(publicIds);
+    } catch (error) {
+      this.logger.error('Failed to delete files by URLs', error);
+      throw error;
+    }
+  }
+
+  /**
    * Generate optimized image URL with transformations
    */
   generateOptimizedUrl(

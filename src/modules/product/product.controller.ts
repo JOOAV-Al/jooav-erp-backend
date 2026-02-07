@@ -10,6 +10,8 @@ import {
   HttpStatus,
   UseGuards,
   UseInterceptors,
+  UploadedFile,
+  UploadedFiles,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -22,7 +24,13 @@ import {
   ApiForbiddenResponse,
   ApiQuery,
   ApiBearerAuth,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import {
+  FileInterceptor,
+  FilesInterceptor,
+  FileFieldsInterceptor,
+} from '@nestjs/platform-express';
 import { ProductService } from './product.service';
 // import { BulkProductCreationService } from './services/bulk-product-creation.service';
 import {
@@ -58,10 +66,18 @@ export class ProductController {
   @Post()
   @UseGuards(UnifiedAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'thumbnail', maxCount: 1 },
+      { name: 'images', maxCount: 10 },
+    ]),
+  )
   @ApiBearerAuth('admin-access-token')
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Create a new product',
-    description: 'Create a new FMCG product with auto-generated SKU and name',
+    summary: 'Create a new product with file uploads',
+    description:
+      'Create a new FMCG product with auto-generated SKU and name, supporting image uploads',
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -69,7 +85,8 @@ export class ProductController {
     type: ProductResponseDto,
   })
   @ApiBadRequestResponse({
-    description: 'Invalid input data or reference not found',
+    description:
+      'Invalid input data, file upload error, or reference not found',
   })
   @ApiConflictResponse({
     description: 'Product with this SKU already exists',
@@ -79,8 +96,21 @@ export class ProductController {
   @AuditLog({ action: 'CREATE', resource: 'product' })
   async create(
     @Body() createProductDto: CreateProductDto,
+    @UploadedFiles()
+    files: {
+      thumbnail?: Express.Multer.File[];
+      images?: Express.Multer.File[];
+    },
     @CurrentUserId() userId: string,
   ): Promise<SuccessResponse<ProductResponseDto>> {
+    // Attach files to DTO
+    if (files.thumbnail && files.thumbnail[0]) {
+      createProductDto.thumbnail = files.thumbnail[0];
+    }
+    if (files.images) {
+      createProductDto.images = files.images;
+    }
+
     const product = await this.productService.create(createProductDto, userId);
     return new SuccessResponse(
       ResponseMessages.created('Product', product.name),
@@ -200,11 +230,18 @@ export class ProductController {
   @Patch(':id')
   @UseGuards(UnifiedAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'thumbnail', maxCount: 1 },
+      { name: 'createImages', maxCount: 10 },
+    ]),
+  )
   @ApiBearerAuth('admin-access-token')
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Update product',
+    summary: 'Update product with file management',
     description:
-      'Update product information. SKU and name are auto-regenerated if identifier fields change.',
+      'Update product information with support for adding/deleting images. SKU and name are auto-regenerated if identifier fields change.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -212,7 +249,8 @@ export class ProductController {
     type: ProductResponseDto,
   })
   @ApiBadRequestResponse({
-    description: 'Invalid input data or reference not found',
+    description:
+      'Invalid input data, file upload error, or reference not found',
   })
   @ApiNotFoundResponse({ description: 'Product not found' })
   @ApiConflictResponse({
@@ -224,8 +262,21 @@ export class ProductController {
   async update(
     @Param('id') id: string,
     @Body() updateProductDto: UpdateProductDto,
+    @UploadedFiles()
+    files: {
+      thumbnail?: Express.Multer.File[];
+      createImages?: Express.Multer.File[];
+    },
     @CurrentUserId() userId: string,
   ): Promise<SuccessResponse<ProductResponseDto>> {
+    // Attach files to DTO
+    if (files.thumbnail && files.thumbnail[0]) {
+      updateProductDto.thumbnail = files.thumbnail[0];
+    }
+    if (files.createImages) {
+      updateProductDto.createImages = files.createImages;
+    }
+
     const product = await this.productService.update(
       id,
       updateProductDto,
