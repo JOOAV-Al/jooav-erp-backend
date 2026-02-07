@@ -12,6 +12,7 @@ import {
   UseInterceptors,
   UploadedFile,
   UploadedFiles,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,6 +26,7 @@ import {
   ApiQuery,
   ApiBearerAuth,
   ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import {
   FileInterceptor,
@@ -55,6 +57,41 @@ import { CacheInterceptor } from '../../common/interceptors/cache.interceptor';
 import { UserRole } from '../../common/enums/';
 import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 
+// Multer file filter for images only
+const imageFileFilter = (
+  req: any,
+  file: Express.Multer.File,
+  callback: any,
+) => {
+  const allowedMimeTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+    'image/svg+xml',
+  ];
+
+  if (!allowedMimeTypes.includes(file.mimetype)) {
+    return callback(
+      new BadRequestException(
+        `Invalid file type: ${file.mimetype}. Only images are allowed.`,
+      ),
+      false,
+    );
+  }
+
+  // Check file size (10MB limit)
+  if (file.size && file.size > 10 * 1024 * 1024) {
+    return callback(
+      new BadRequestException('File size too large. Maximum size is 10MB.'),
+      false,
+    );
+  }
+
+  callback(null, true);
+};
+
 @ApiTags('Products')
 @Controller('products')
 export class ProductController {
@@ -67,10 +104,19 @@ export class ProductController {
   @UseGuards(UnifiedAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'thumbnail', maxCount: 1 },
-      { name: 'images', maxCount: 10 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'thumbnail', maxCount: 1 },
+        { name: 'images', maxCount: 10 },
+      ],
+      {
+        fileFilter: imageFileFilter,
+        limits: {
+          fileSize: 30 * 1024 * 1024, // 30MB
+          files: 11, // 1 thumbnail + 10 images
+        },
+      },
+    ),
   )
   @ApiBearerAuth('admin-access-token')
   @ApiConsumes('multipart/form-data')
@@ -78,6 +124,39 @@ export class ProductController {
     summary: 'Create a new product with file uploads',
     description:
       'Create a new FMCG product with auto-generated SKU and name, supporting image uploads',
+  })
+  @ApiBody({
+    description: 'Product creation data with file uploads',
+    schema: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', maxLength: 500, example: '' },
+        brandId: { type: 'string', example: '' },
+        subcategoryId: { type: 'string', example: '' },
+        variantId: { type: 'string', example: '' },
+        packSizeId: { type: 'string', example: '' },
+        packTypeId: { type: 'string', example: '' },
+        price: { type: 'string', example: '' },
+        thumbnail: {
+          type: 'string',
+          format: 'binary',
+          description: 'Product thumbnail image (single file)',
+        },
+        images: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+          description: 'Product images (up to 10 files)',
+        },
+      },
+      required: [
+        'brandId',
+        'subcategoryId',
+        'variantId',
+        'packSizeId',
+        'packTypeId',
+        'price',
+      ],
+    },
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -104,10 +183,10 @@ export class ProductController {
     @CurrentUserId() userId: string,
   ): Promise<SuccessResponse<ProductResponseDto>> {
     // Attach files to DTO
-    if (files.thumbnail && files.thumbnail[0]) {
+    if (files?.thumbnail && files.thumbnail[0]) {
       createProductDto.thumbnail = files.thumbnail[0];
     }
-    if (files.images) {
+    if (files?.images) {
       createProductDto.images = files.images;
     }
 
@@ -231,10 +310,19 @@ export class ProductController {
   @UseGuards(UnifiedAuthGuard, RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
   @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'thumbnail', maxCount: 1 },
-      { name: 'createImages', maxCount: 10 },
-    ]),
+    FileFieldsInterceptor(
+      [
+        { name: 'thumbnail', maxCount: 1 },
+        { name: 'createImages', maxCount: 10 },
+      ],
+      {
+        fileFilter: imageFileFilter,
+        limits: {
+          fileSize: 10 * 1024 * 1024, // 10MB
+          files: 11, // 1 thumbnail + 10 images
+        },
+      },
+    ),
   )
   @ApiBearerAuth('admin-access-token')
   @ApiConsumes('multipart/form-data')
@@ -242,6 +330,39 @@ export class ProductController {
     summary: 'Update product with file management',
     description:
       'Update product information with support for adding/deleting images. SKU and name are auto-regenerated if identifier fields change.',
+  })
+  @ApiBody({
+    description: 'Product update data with file management',
+    schema: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', maxLength: 500, example: '' },
+        brandId: { type: 'string', example: '' },
+        subcategoryId: { type: 'string', example: '' },
+        variantId: { type: 'string', example: '' },
+        packSizeId: { type: 'string', example: '' },
+        packTypeId: { type: 'string', example: '' },
+        price: { type: 'string', example: '' },
+        thumbnail: {
+          type: 'string',
+          format: 'binary',
+          description: 'New product thumbnail image (replaces existing)',
+        },
+        createImages: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+        },
+        deleteImages: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of image URLs to delete from product',
+        },
+        deleteThumbnail: {
+          type: 'boolean',
+          description: 'Set to true to delete current thumbnail',
+        },
+      },
+    },
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -270,10 +391,10 @@ export class ProductController {
     @CurrentUserId() userId: string,
   ): Promise<SuccessResponse<ProductResponseDto>> {
     // Attach files to DTO
-    if (files.thumbnail && files.thumbnail[0]) {
+    if (files?.thumbnail && files.thumbnail[0]) {
       updateProductDto.thumbnail = files.thumbnail[0];
     }
-    if (files.createImages) {
+    if (files?.createImages) {
       updateProductDto.createImages = files.createImages;
     }
 

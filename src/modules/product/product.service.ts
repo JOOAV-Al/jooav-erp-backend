@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,6 +22,8 @@ import { BarcodeGenerator } from '../../common/utils/barcode.utils';
 
 @Injectable()
 export class ProductService {
+  private readonly logger = new Logger(ProductService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditService,
@@ -232,13 +235,21 @@ export class ProductService {
       }
     }
 
+    // Check if SKU already exists
+    const existingProduct = await this.prisma.product.findUnique({
+      where: { sku },
+    });
+
+    if (existingProduct) {
+      throw new ConflictException(`Product with SKU "${sku}" already exists`);
+    }
     // Handle file uploads
     let uploadedImageUrls: string[] = [];
     let uploadedThumbnailUrl: string | undefined = undefined;
 
     try {
       // Upload images to Cloudinary
-      if (images && images.length > 0) {
+      if (images && Array.isArray(images) && images.length > 0) {
         const imageUploads = await this.cloudinaryService.uploadMultipleFiles(
           images,
           {
@@ -265,15 +276,6 @@ export class ProductService {
       }
     } catch (error) {
       throw new BadRequestException(`File upload failed: ${error.message}`);
-    }
-
-    // Check if SKU already exists
-    const existingProduct = await this.prisma.product.findUnique({
-      where: { sku },
-    });
-
-    if (existingProduct) {
-      throw new ConflictException(`Product with SKU "${sku}" already exists`);
     }
 
     try {
@@ -597,10 +599,69 @@ export class ProductService {
     try {
       // Delete specified images from Cloudinary and remove from array
       if (deleteImages && deleteImages.length > 0) {
-        await this.cloudinaryService.deleteFilesByUrls(deleteImages);
-        updatedImages = updatedImages.filter(
-          (url) => !deleteImages.includes(url),
-        );
+        // Validate deleteImages array
+        const validDeleteImages = deleteImages.filter((url) => {
+          if (!url || typeof url !== 'string') {
+            this.logger.warn('Invalid image URL provided for deletion', {
+              invalidUrl: url,
+              productId: id,
+            });
+            return false;
+          }
+
+          // Check if URL exists in current product images
+          if (!existingProduct.images.includes(url)) {
+            this.logger.warn('URL not found in product images', {
+              url,
+              productId: id,
+            });
+            return false;
+          }
+
+          return true;
+        });
+
+        if (validDeleteImages.length > 0) {
+          const deleteResult =
+            await this.cloudinaryService.deleteFilesByUrls(validDeleteImages);
+
+          // Log any deletion errors but don't fail the whole operation
+          if (
+            deleteResult.errors &&
+            Object.keys(deleteResult.errors).length > 0
+          ) {
+            this.logger.warn('Some images failed to delete from Cloudinary', {
+              errors: deleteResult.errors,
+              productId: id,
+            });
+          }
+
+          // Remove successfully deleted images from the array
+          const successfullyDeleted = Object.keys(deleteResult.deleted || {});
+          if (successfullyDeleted.length > 0) {
+            // Map public IDs back to URLs for filtering
+            const deletedUrls = validDeleteImages.filter((url) => {
+              const publicId =
+                this.cloudinaryService.extractPublicIdFromUrl(url);
+              return successfullyDeleted.includes(publicId);
+            });
+
+            updatedImages = updatedImages.filter(
+              (url) => !deletedUrls.includes(url),
+            );
+
+            this.logger.log('Successfully deleted images from Cloudinary', {
+              deletedCount: deletedUrls.length,
+              deletedUrls,
+              productId: id,
+            });
+          }
+        } else {
+          this.logger.warn('No valid images to delete', {
+            providedUrls: deleteImages,
+            productId: id,
+          });
+        }
       }
 
       // Upload new images and add to array

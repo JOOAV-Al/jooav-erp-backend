@@ -61,7 +61,7 @@ export class CreateProductDto {
 
   @ApiProperty({
     description: 'Pack size ID',
-    example: 'cuid_example_pack_size_id',
+    example: '',
   })
   @IsNotEmpty()
   @IsString()
@@ -69,7 +69,7 @@ export class CreateProductDto {
 
   @ApiProperty({
     description: 'Pack type ID',
-    example: 'cuid_example_pack_type_id',
+    example: '',
   })
   @IsNotEmpty()
   @IsString()
