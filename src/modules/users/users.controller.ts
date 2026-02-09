@@ -88,24 +88,6 @@ export class UsersController {
     );
   }
 
-  @Get('stats')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
-  @ApiOperation({ summary: 'Get user statistics (Admin only)' })
-  @ApiResponse({
-    status: 200,
-    description: 'User statistics retrieved successfully',
-  })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Admin access required',
-  })
-  async getUserStats() {
-    const stats = await this.usersService.getUserStats();
-    return new SuccessResponse(ResponseMessages.statsRetrieved('User'), stats);
-  }
-
   @Post()
   @UseGuards(RolesGuard)
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
@@ -134,6 +116,38 @@ export class UsersController {
     @Request() req: any,
   ): Promise<UserProfileDto> {
     return this.usersService.create(createUserDto, currentUserId, req);
+  }
+
+  @Get('stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Get user statistics',
+    description: 'Get comprehensive user statistics',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User statistics retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        data: {
+          type: 'object',
+          properties: {
+            totalUsers: { type: 'number', example: 50 },
+            archived: { type: 'number', example: 3 },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin only' })
+  async getUserStats(): Promise<SuccessResponse<any>> {
+    const stats = await this.usersService.getUserStats();
+    return new SuccessResponse('User statistics retrieved successfully', stats);
   }
 
   @Get(':id')

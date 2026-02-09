@@ -783,30 +783,8 @@ export class UsersService {
   // ================================
 
   /**
-   * Get user statistics
+   * Get user activity logs with pagination
    */
-  async getUserStats() {
-    const [totalUsers, activeUsers, deactivatedUsers, adminUsers] =
-      await Promise.all([
-        this.prisma.user.count(),
-        this.prisma.user.count({ where: { status: UserStatus.ACTIVE } }),
-        this.prisma.user.count({ where: { status: UserStatus.DEACTIVATED } }),
-        this.prisma.user.count({
-          where: {
-            role: { in: [UserRole.SUPER_ADMIN, UserRole.ADMIN] },
-          },
-        }),
-      ]);
-
-    return {
-      totalUsers,
-      activeUsers,
-      deactivatedUsers,
-      adminUsers,
-      usersByRole: await this.getUsersByRole(),
-      recentRegistrations: await this.getRecentRegistrations(),
-    };
-  }
 
   /**
    * Get users grouped by role
@@ -898,6 +876,28 @@ export class UsersService {
         hasNextPage: page * limit < total,
         hasPreviousPage: page > 1,
       },
+    };
+  }
+
+  /**
+   * Get user statistics
+   */
+  async getUserStats(): Promise<{
+    totalUsers: number;
+    archived: number;
+  }> {
+    const [totalUsers, archived] = await Promise.all([
+      this.prisma.user.count(),
+      this.prisma.user.count({
+        where: {
+          status: UserStatus.SUSPENDED, // Assuming SUSPENDED is "archived"
+        },
+      }),
+    ]);
+
+    return {
+      totalUsers,
+      archived,
     };
   }
 }

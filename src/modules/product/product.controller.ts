@@ -123,13 +123,19 @@ export class ProductController {
   @ApiOperation({
     summary: 'Create a new product with file uploads',
     description:
-      'Create a new FMCG product with auto-generated SKU and name, supporting image uploads',
+      'Create a new FMCG product with user-provided unique name and auto-generated SKU, supporting image uploads',
   })
   @ApiBody({
     description: 'Product creation data with file uploads',
     schema: {
       type: 'object',
       properties: {
+        name: {
+          type: 'string',
+          maxLength: 255,
+          example: 'Indomie Chicken Noodles 70g',
+          description: 'Product name (must be unique)',
+        },
         description: { type: 'string', maxLength: 500, example: '' },
         brandId: { type: 'string', example: '' },
         subcategoryId: { type: 'string', example: '' },
@@ -278,6 +284,42 @@ export class ProductController {
     );
   }
 
+  @Get('stats')
+  @UseGuards(UnifiedAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @ApiBearerAuth('admin-access-token')
+  @ApiOperation({
+    summary: 'Get product statistics',
+    description: 'Get comprehensive product statistics',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Product statistics retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        data: {
+          type: 'object',
+          properties: {
+            totalProducts: { type: 'number', example: 150 },
+            totalVariants: { type: 'number', example: 25 },
+            drafts: { type: 'number', example: 10 },
+            archived: { type: 'number', example: 5 },
+          },
+        },
+      },
+    },
+  })
+  async getProductStats(): Promise<SuccessResponse<any>> {
+    const stats = await this.productService.getProductStats();
+    return new SuccessResponse(
+      'Product statistics retrieved successfully',
+      stats,
+    );
+  }
+
   @Get(':id')
   @UseInterceptors(CacheInterceptor)
   @Cache({
@@ -329,7 +371,7 @@ export class ProductController {
   @ApiOperation({
     summary: 'Update product with file management',
     description:
-      'Update product information with support for adding/deleting images. SKU and name are auto-regenerated if identifier fields change.',
+      'Update product information with support for adding/deleting images. Only SKU is auto-regenerated if identifier fields change. Product name can be updated and must remain unique.',
   })
   @ApiBody({
     description: 'Product update data with file management',

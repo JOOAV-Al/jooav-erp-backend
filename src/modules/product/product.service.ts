@@ -32,14 +32,14 @@ export class ProductService {
   ) {}
 
   /**
-   * Generate product name, SKU, and barcode
+   * Generate product SKU and barcode only
    */
   private async generateProductIdentifiers(
     brandId: string,
     variantId: string,
     packSizeId: string,
     packTypeId: string,
-  ): Promise<{ name: string; sku: string; barcode: string }> {
+  ): Promise<{ sku: string; barcode: string }> {
     // Get brand, variant, pack size, and pack type names
     const [brand, variant, packSize, packType] = await Promise.all([
       this.prisma.brand.findUnique({
@@ -76,9 +76,6 @@ export class ProductService {
       throw new BadRequestException('Pack type not found');
     }
 
-    // Generate name: "Brand Variant PackSize (PackType)"
-    const name = `${brand.name} ${variant.name} ${packSize.name} (${packType.name})`;
-
     // Generate SKU: "BRAND-VARIANT-PACKSIZE-PACKTYPE"
     const sku = StringUtils.generateSlug(
       `${brand.name}-${variant.name}-${packSize.name}-${packType.name}`,
@@ -92,7 +89,7 @@ export class ProductService {
       packType.name,
     );
 
-    return { name, sku, barcode };
+    return { sku, barcode };
   }
 
   /**
@@ -189,6 +186,7 @@ export class ProductService {
     userId: string,
   ): Promise<ProductResponseDto> {
     const {
+      name,
       brandId,
       subcategoryId,
       variantId,
@@ -210,17 +208,14 @@ export class ProductService {
     // Validate pack entities
     await this.validatePackEntities(packSizeId, packTypeId, variantId);
 
-    // Generate name, SKU, and barcode (if not provided)
-    const {
-      name,
-      sku,
-      barcode: generatedBarcode,
-    } = await this.generateProductIdentifiers(
-      brandId,
-      variantId,
-      packSizeId,
-      packTypeId,
-    );
+    // Generate SKU and barcode (name is provided by user)
+    const { sku, barcode: generatedBarcode } =
+      await this.generateProductIdentifiers(
+        brandId,
+        variantId,
+        packSizeId,
+        packTypeId,
+      );
 
     // Use provided barcode or generated one (but barcode is currently not used in schema)
     const finalBarcode = providedBarcode || generatedBarcode;
@@ -233,6 +228,18 @@ export class ProductService {
           'Invalid barcode format. Must be 12-13 digits.',
         );
       }
+    }
+
+    // Check if product name already exists
+    const existingProductByName = await this.prisma.product.findFirst({
+      where: {
+        name,
+        deletedAt: null,
+      },
+    });
+
+    if (existingProductByName) {
+      throw new ConflictException(`Product with name "${name}" already exists`);
     }
 
     // Check if SKU already exists
@@ -516,6 +523,7 @@ export class ProductService {
     }
 
     const {
+      name,
       brandId,
       subcategoryId,
       variantId,
@@ -528,9 +536,25 @@ export class ProductService {
       ...rest
     } = updateProductDto;
 
-    let name: string | undefined;
     let sku: string | undefined;
     let manufacturerId: string | undefined;
+
+    // Check if name is unique (if being updated)
+    if (name && name !== existingProduct.name) {
+      const existingProductByName = await this.prisma.product.findFirst({
+        where: {
+          name,
+          id: { not: id }, // Exclude current product
+          deletedAt: null,
+        },
+      });
+
+      if (existingProductByName) {
+        throw new ConflictException(
+          `Product with name "${name}" already exists`,
+        );
+      }
+    }
 
     // If any identifier fields are being updated, regenerate name, SKU
     if (brandId || variantId || packSizeId || packTypeId) {
@@ -575,7 +599,6 @@ export class ProductService {
         finalPackTypeId,
       );
 
-      name = identifiers.name;
       sku = identifiers.sku;
 
       // Check if new SKU conflicts with existing products (excluding current)
@@ -1028,6 +1051,44 @@ export class ProductService {
     return {
       ...updatedProduct,
       subcategoryId: updatedProduct.subcategoryId || undefined,
+    };
+  }
+
+  /**
+   * Get product statistics
+   */
+  async getProductStats(): Promise<{
+    totalProducts: number;
+    totalVariants: number;
+    drafts: number;
+    archived: number;
+  }> {
+    const [totalProducts, totalVariants, drafts, archived] = await Promise.all([
+      this.prisma.product.count({
+        where: { deletedAt: null },
+      }),
+      this.prisma.variant.count({
+        where: { deletedAt: null },
+      }),
+      this.prisma.product.count({
+        where: {
+          deletedAt: null,
+          status: 'DRAFT',
+        },
+      }),
+      this.prisma.product.count({
+        where: {
+          deletedAt: null,
+          status: 'ARCHIVED',
+        },
+      }),
+    ]);
+
+    return {
+      totalProducts,
+      totalVariants,
+      drafts,
+      archived,
     };
   }
 }
