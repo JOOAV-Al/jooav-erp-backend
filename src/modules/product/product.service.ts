@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CacheInvalidationService } from '../cache/cache-invalidation.service';
+import { CacheService } from '../cache/cache.service';
 import { CloudinaryService } from '../storage/cloudinary.service';
 import {
   CreateProductDto,
@@ -25,10 +26,11 @@ export class ProductService {
   private readonly logger = new Logger(ProductService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly auditLog: AuditService,
-    private readonly cacheInvalidationService: CacheInvalidationService,
-    private readonly cloudinaryService: CloudinaryService,
+    private prisma: PrismaService,
+    private cloudinaryService: CloudinaryService,
+    private auditLog: AuditService,
+    private cacheInvalidationService: CacheInvalidationService,
+    private cacheService: CacheService,
   ) {}
 
   /**
@@ -352,7 +354,7 @@ export class ProductService {
       });
 
       // Invalidate product caches
-      await this.cacheInvalidationService.invalidateProducts();
+      await this.cacheService.invalidateByTag('products');
 
       return {
         ...product,
@@ -791,7 +793,7 @@ export class ProductService {
       });
 
       // Invalidate product caches
-      await this.cacheInvalidationService.invalidateProduct(id);
+      await this.invalidateProductCaches(id, product);
 
       return {
         ...product,
@@ -842,8 +844,157 @@ export class ProductService {
       },
     });
 
-    // Invalidate product caches
-    await this.cacheInvalidationService.invalidateProduct(id);
+    // Invalidate caches using smart tag-based invalidation
+    await this.invalidateProductCaches(id, existingProduct);
+  }
+
+  async removeMany(
+    productIds: string[],
+    userId: string,
+  ): Promise<{
+    deletedCount: number;
+    deletedIds: string[];
+    failedIds: Array<{ id: string; error: string }>;
+  }> {
+    const deletedIds: string[] = [];
+    const failedIds: Array<{ id: string; error: string }> = [];
+
+    // Process each product ID
+    for (const productId of productIds) {
+      try {
+        // Check if product exists
+        const existingProduct = await this.prisma.product.findFirst({
+          where: { id: productId, deletedAt: null },
+        });
+
+        if (!existingProduct) {
+          failedIds.push({ id: productId, error: 'Product not found' });
+          continue;
+        }
+
+        // Soft delete the product
+        await this.prisma.product.update({
+          where: { id: productId },
+          data: {
+            status: 'ARCHIVED',
+            deletedAt: new Date(),
+            deletedBy: userId,
+          },
+        });
+
+        // Log audit for each product
+        await this.auditLog.createAuditLog({
+          action: 'BULK_DELETE',
+          resource: 'product',
+          resourceId: productId,
+          userId,
+          metadata: {
+            productName: existingProduct.name,
+            sku: existingProduct.sku,
+            bulkOperation: true,
+          },
+        });
+
+        // Invalidate caches using tags
+        await this.invalidateProductCaches(productId, existingProduct);
+
+        deletedIds.push(productId);
+      } catch (error) {
+        this.logger.error(`Failed to delete product ${productId}`, error);
+        failedIds.push({
+          id: productId,
+          error: error.message || 'Unknown error occurred',
+        });
+      }
+    }
+
+    // Immediately invalidate ALL product-related caches for bulk operations
+    await this.cacheService.invalidateByTag('products');
+
+    return {
+      deletedCount: deletedIds.length,
+      deletedIds,
+      failedIds,
+    };
+  }
+
+  async updateManyStatus(
+    productIds: string[],
+    status: 'DRAFT' | 'QUEUE' | 'LIVE' | 'ARCHIVED',
+    userId: string,
+  ): Promise<{
+    updatedCount: number;
+    updatedIds: string[];
+    failedIds: Array<{ id: string; error: string }>;
+  }> {
+    const updatedIds: string[] = [];
+    const failedIds: Array<{ id: string; error: string }> = [];
+
+    // Process each product ID
+    for (const productId of productIds) {
+      try {
+        // Check if product exists
+        const existingProduct = await this.prisma.product.findFirst({
+          where: { id: productId, deletedAt: null },
+        });
+
+        if (!existingProduct) {
+          failedIds.push({ id: productId, error: 'Product not found' });
+          continue;
+        }
+
+        // Update the product status
+        await this.prisma.product.update({
+          where: { id: productId },
+          data: {
+            status,
+            updatedBy: userId,
+            updatedAt: new Date(),
+          },
+        });
+
+        // Log audit for each product
+        await this.auditLog.createAuditLog({
+          action: 'BULK_UPDATE_STATUS',
+          resource: 'product',
+          resourceId: productId,
+          userId,
+          metadata: {
+            productName: existingProduct.name,
+            sku: existingProduct.sku,
+            oldStatus: existingProduct.status,
+            newStatus: status,
+            bulkOperation: true,
+          },
+        });
+
+        // Invalidate caches using tags
+        await this.invalidateProductCaches(productId, {
+          ...existingProduct,
+          status,
+        });
+
+        updatedIds.push(productId);
+      } catch (error) {
+        this.logger.error(
+          `Failed to update product status ${productId}`,
+          error,
+        );
+        failedIds.push({
+          id: productId,
+          error: error.message || 'Unknown error occurred',
+        });
+      }
+    }
+
+    // Immediately invalidate ALL product-related caches for bulk operations
+    await this.cacheService.invalidateByTag('products');
+
+    return {
+      updatedCount: updatedIds.length,
+      updatedIds,
+      failedIds,
+    };
   }
 
   async activate(id: string, userId: string): Promise<ProductResponseDto> {
@@ -1090,5 +1241,63 @@ export class ProductService {
       drafts,
       archived,
     };
+  }
+
+  /**
+   * Smart cache invalidation based on product properties
+   */
+  private async invalidateProductCaches(
+    productId: string,
+    product: any,
+  ): Promise<void> {
+    try {
+      // Always invalidate the specific product cache
+      await this.cacheService.invalidateByTag(`product:${productId}`);
+
+      // Invalidate general product lists
+      await this.cacheService.invalidateByTag('products');
+
+      // Invalidate brand-specific caches if product has brand
+      if (product.brandId) {
+        await this.cacheService.invalidateByTag(`brand:${product.brandId}`);
+      }
+
+      // Invalidate category-specific caches
+      if (product.subcategoryId) {
+        await this.cacheService.invalidateByTag(
+          `subcategory:${product.subcategoryId}`,
+        );
+
+        // Get category from subcategory to invalidate category caches too
+        const subcategory = await this.prisma.subcategory.findUnique({
+          where: { id: product.subcategoryId },
+          select: { categoryId: true },
+        });
+        if (subcategory?.categoryId) {
+          await this.cacheService.invalidateByTag(
+            `category:${subcategory.categoryId}`,
+          );
+        }
+      }
+
+      // Invalidate status-specific caches
+      if (product.status) {
+        await this.cacheService.invalidateByTag(`status:${product.status}`);
+      }
+
+      // Invalidate variant-specific caches
+      if (product.variantId) {
+        await this.cacheService.invalidateByTag(`variant:${product.variantId}`);
+      }
+
+      this.logger.debug(
+        `Invalidated smart cache tags for product ${productId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error invalidating caches for product ${productId}:`,
+        error,
+      );
+    }
   }
 }
