@@ -679,13 +679,7 @@ async function main() {
   const wholesalerProfile = await prisma.wholesaler.create({
     data: {
       userId: wholesalerUser.id,
-      businessName: 'Metro Wholesale Distribution',
-      businessType: 'Wholesale',
       regionId: regions[0].id, // Lagos region
-      businessLicense: 'WHL-NGR-2024-001',
-      verificationStatus: 'APPROVED',
-      approvedBy: superAdmin.id,
-      approvedAt: new Date(),
     },
   });
 
@@ -696,7 +690,7 @@ async function main() {
         orderNumber: 'ORD-260207-001',
         wholesalerId: wholesalerProfile.id,
         createdById: wholesalerUser.id,
-        status: 'SUBMITTED',
+        status: 'CONFIRMED',
         subtotal: 180000,
         totalAmount: 180000,
         deliveryAddress: {
