@@ -43,6 +43,7 @@ model User {
   sessions      UserSession[]
   activities    UserActivity[]
   createdOrders Order[]        @relation("CreatedBy")
+  assignedOrders Order[]       @relation("AssignedProcurementOfficer")
   itemStatusUpdates OrderItem[] @relation("ItemStatusUpdatedBy")
 
   // JooavERP specific relations
@@ -372,7 +373,7 @@ model Order {
 
   // Relations
   wholesaler         Wholesaler         @relation(fields: [wholesalerId], references: [id])
-  assignedProcurementOfficer   ProcurementOfficerProfile? @relation("AssignedProcurementOfficer", fields: [assignedProcurementOfficerId], references: [id])
+  assignedProcurementOfficer   User? @relation("AssignedProcurementOfficer", fields: [assignedProcurementOfficerId], references: [id])
   createdBy          User                @relation("CreatedBy", fields: [createdById], references: [id])
   items              OrderItem[]
   payments           Payment[]
@@ -644,7 +645,6 @@ model ProcurementOfficerProfile {
   // Relations
   user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   region         Region? @relation(fields: [regionId], references: [id])
-  assignedOrders Order[] @relation("AssignedProcurementOfficer")
 
   @@map("procurement_officer_profiles")
 }

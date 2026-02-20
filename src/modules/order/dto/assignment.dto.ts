@@ -58,46 +58,29 @@ export class AssignmentResponseDto {
 
 export class AssignmentStatusDto {
   @ApiProperty({
-    description: 'Order number',
-    example: 'ORD-2026-001',
+    description: 'Success status',
+    example: true,
   })
-  orderNumber: string;
+  success: boolean;
 
   @ApiProperty({
-    description: 'Assignment status',
-    example: 'PENDING_ACCEPTANCE',
+    description: 'Response message',
+    example: 'Order assigned successfully',
   })
-  status: string;
+  message: string;
 
   @ApiProperty({
-    description: 'Procurement officer name',
-    example: 'John Doe',
+    description: 'Assignment details',
   })
-  procurementOfficerName: string;
-
-  @ApiProperty({
-    description: 'Assignment date',
-    example: '2026-02-19T10:30:00Z',
-  })
-  assignedAt: Date;
-
-  @ApiPropertyOptional({
-    description: 'Response date if accepted/rejected',
-    example: '2026-02-19T11:15:00Z',
-  })
-  respondedAt?: Date;
-
-  @ApiPropertyOptional({
-    description: 'Assignment notes',
-    example: 'Urgent order requiring immediate attention',
-  })
-  assignmentNotes?: string;
-
-  @ApiPropertyOptional({
-    description: 'Response reason',
-    example: 'Accepted - will process immediately',
-  })
-  responseReason?: string;
+  data: {
+    orderNumber: string;
+    status: string;
+    procurementOfficerName: string;
+    assignedAt: Date;
+    respondedAt?: Date;
+    assignmentNotes?: string;
+    responseReason?: string;
+  };
 }
 
 export class BulkUpdateOrderItemDto {
@@ -146,33 +129,33 @@ export class BulkUpdateOrderItemsDto {
 }
 
 export class BulkUpdateResultDto {
-  @ApiProperty({ description: 'Operation summary message' })
+  @ApiProperty({
+    description: 'Success status',
+    example: true,
+  })
+  success: boolean;
+
+  @ApiProperty({
+    description: 'Operation summary message',
+    example: 'Bulk update completed: 5 successful, 0 failed',
+  })
   @IsString()
   message: string;
 
-  @ApiProperty({ description: 'Total number of items processed' })
-  @IsNumber()
-  totalItems: number;
-
-  @ApiProperty({ description: 'Number of successful updates' })
-  @IsNumber()
-  successCount: number;
-
-  @ApiProperty({ description: 'Number of failed updates' })
-  @IsNumber()
-  failureCount: number;
-
   @ApiProperty({
-    description: 'Detailed results for each item',
-    type: [Object],
+    description: 'Update results data',
   })
-  @IsArray()
-  results: Array<{
-    itemId: string;
-    success: boolean;
-    message: string;
-    updatedItem?: any;
-  }>;
+  data: {
+    totalItems: number;
+    successCount: number;
+    failureCount: number;
+    results: Array<{
+      itemId: string;
+      success: boolean;
+      message: string;
+      updatedItem?: any;
+    }>;
+  };
 }
 
 export class AutoAssignmentConfigDto {
@@ -212,6 +195,23 @@ export class OfficerWorkloadDto {
 
   @ApiProperty({ description: 'Officer status' })
   status: string;
+}
+
+export class OfficerWorkloadResponseDto {
+  @ApiProperty({ description: 'Success status', example: true })
+  success: boolean;
+
+  @ApiProperty({
+    description: 'Response message',
+    example: 'Officer workloads retrieved successfully',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Officer workload data',
+    type: [OfficerWorkloadDto],
+  })
+  data: OfficerWorkloadDto[];
 }
 
 export class UpdateAvailabilityDto {

@@ -1,6 +1,7 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
+import * as crypto from 'crypto';
 import { MonnifyConfig } from '../../config/monnify.config';
 
 export interface CreateInvoiceRequest {
@@ -347,15 +348,74 @@ export class MonnifyService {
 
   /**
    * Verify Monnify webhook signature
+   * Implements SHA-512 HMAC signature verification as per Monnify documentation
    */
-  async verifyWebhook(webhookData: any): Promise<boolean> {
+  async verifyWebhook(webhookData: any, signature: string): Promise<boolean> {
     try {
-      // For now, return true - implement proper signature verification
-      // based on Monnify documentation
-      return true;
+      const clientSecret = this.configService.get<string>('MONNIFY_SECRET_KEY');
+      if (!clientSecret) {
+        this.logger.error('MONNIFY_SECRET_KEY not configured');
+        return false;
+      }
+
+      if (!signature) {
+        this.logger.warn('No monnify-signature header provided');
+        return false;
+      }
+
+      // Convert webhook data to string (must match exactly how Monnify computes it)
+      const stringifiedData = JSON.stringify(webhookData);
+
+      // Compute HMAC-SHA512 signature
+      const computedSignature = crypto
+        .createHmac('sha512', clientSecret)
+        .update(stringifiedData)
+        .digest('hex');
+
+      // Compare signatures
+      const isValid = computedSignature === signature;
+
+      if (!isValid) {
+        this.logger.warn('Webhook signature mismatch', {
+          computed: computedSignature,
+          received: signature,
+          data: stringifiedData,
+        });
+      } else {
+        this.logger.log('Webhook signature verified successfully');
+      }
+
+      return isValid;
     } catch (error) {
-      this.logger.error('Failed to verify webhook:', error.message);
+      this.logger.error('Failed to verify webhook signature:', error.message);
       return false;
     }
+  }
+
+  /**
+   * Validate webhook IP address
+   * Monnify webhooks come from: 35.242.133.146
+   */
+  validateWebhookIP(clientIP: string): boolean {
+    const allowedIPs = [
+      '35.242.133.146',
+      '127.0.0.1', // Allow localhost for development
+      '::1', // Allow localhost IPv6 for development
+      '::ffff:127.0.0.1', // Allow mapped localhost for development
+    ];
+
+    const isDevelopment = this.configService.get('NODE_ENV') !== 'production';
+
+    if (isDevelopment) {
+      this.logger.log(`Development mode: allowing IP ${clientIP}`);
+      return true;
+    }
+
+    const isValid = allowedIPs.includes(clientIP);
+    if (!isValid) {
+      this.logger.warn(`Webhook request from unauthorized IP: ${clientIP}`);
+    }
+
+    return isValid;
   }
 }

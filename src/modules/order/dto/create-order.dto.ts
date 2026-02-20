@@ -8,13 +8,17 @@ import {
   ValidateNested,
   IsNotEmpty,
   Min,
+  IsEnum,
+  IsDateString,
+  IsInt,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { OrderStatus, OrderItemStatus } from '@prisma/client';
 
 export class CreateOrderDto {
   @ApiProperty({
-    description: 'Wholesaler ID (required when admin creates order)',
-    example: 'cuid_wholesaler_id',
+    description: 'Wholesaler User ID (required when admin creates order)',
+    example: 'cuid_user_id',
     required: false,
   })
   @IsOptional()
@@ -91,40 +95,37 @@ export class OrderItemDto {
 
 export class CheckoutResponseDto {
   @ApiProperty({
-    description: 'Order details',
+    description: 'Success status',
+    example: true,
   })
-  order: {
-    id: string;
-    orderNumber: string;
-    totalAmount: number;
-    status: string;
+  success: boolean;
+
+  @ApiProperty({
+    description: 'Response message',
+    example: 'Order created successfully',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Order and payment data',
+  })
+  data: {
+    order: {
+      id: string;
+      orderNumber: string;
+      totalAmount: number;
+      status: string;
+    };
+    virtualAccounts: Array<{
+      accountNumber: string;
+      accountName: string;
+      bankCode: string;
+      bankName: string;
+    }>;
+    checkoutUrl: string;
+    expiryDate: string;
+    invoiceReference: string;
   };
-
-  @ApiProperty({
-    description: 'Virtual account details for bank transfer',
-    type: 'array',
-  })
-  virtualAccounts: Array<{
-    accountNumber: string;
-    accountName: string;
-    bankCode: string;
-    bankName: string;
-  }>;
-
-  @ApiProperty({
-    description: 'Checkout URL for online payment',
-  })
-  checkoutUrl: string;
-
-  @ApiProperty({
-    description: 'Payment expiry date',
-  })
-  expiryDate: string;
-
-  @ApiProperty({
-    description: 'Invoice reference for tracking',
-  })
-  invoiceReference: string;
 }
 
 export class PaymentConfirmationDto {
@@ -153,20 +154,15 @@ export class PaymentConfirmationDto {
 export class UpdateOrderItemStatusDto {
   @ApiProperty({
     description: 'New status for the order item',
-    enum: [
-      'PENDING',
-      'PAID',
-      'SOURCING',
-      'READY',
-      'SHIPPED',
-      'DELIVERED',
-      'UNAVAILABLE',
-      'CANCELLED',
-    ],
+    enum: OrderItemStatus,
+    enumName: 'OrderItemStatus',
+    example: OrderItemStatus.SOURCING,
   })
-  @IsString()
+  @IsEnum(OrderItemStatus, {
+    message: 'Status must be a valid OrderItemStatus',
+  })
   @IsNotEmpty()
-  status: string;
+  status: OrderItemStatus;
 
   @ApiProperty({
     description: 'Processing notes',
@@ -175,4 +171,58 @@ export class UpdateOrderItemStatusDto {
   @IsOptional()
   @IsString()
   processingNotes?: string;
+}
+
+export class ListOrdersQueryDto {
+  @ApiProperty({
+    description: 'Filter by order status',
+    enum: OrderStatus,
+    required: false,
+    example: '',
+  })
+  @IsOptional()
+  @IsEnum(OrderStatus)
+  status?: OrderStatus;
+
+  @ApiProperty({
+    description: 'Filter orders from date (ISO format)',
+    required: false,
+    example: '',
+  })
+  @IsOptional()
+  @IsDateString()
+  fromDate?: string;
+
+  @ApiProperty({
+    description: 'Filter orders to date (ISO format)',
+    required: false,
+    example: '',
+  })
+  @IsOptional()
+  @IsDateString()
+  toDate?: string;
+
+  @ApiProperty({
+    description: 'Page number (starting from 1)',
+    required: false,
+    example: 1,
+    default: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiProperty({
+    description: 'Number of items per page',
+    required: false,
+    example: 10,
+    default: 10,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limit?: number = 10;
 }

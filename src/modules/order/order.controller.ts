@@ -11,6 +11,8 @@ import {
   HttpStatus,
   Logger,
   BadRequestException,
+  Headers,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -35,18 +37,20 @@ import {
   CheckoutResponseDto,
   PaymentConfirmationDto,
   UpdateOrderItemStatusDto,
+  ListOrdersQueryDto,
 } from './dto/create-order.dto';
+import { WebhookResponseDto } from './dto/webhook.dto';
 import {
   AssignOrderDto,
   AssignmentResponseDto,
   AssignmentStatusDto,
   BulkUpdateOrderItemsDto,
   BulkUpdateResultDto,
-  OfficerWorkloadDto,
   UpdateAvailabilityDto,
   AvailabilityStatusDto,
 } from './dto/assignment.dto';
 import { UnifiedAuthGuard } from 'src/common/guards/unified-auth.guard';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @ApiTags('Orders')
 @Controller('orders')
@@ -204,30 +208,7 @@ export class OrderController {
   )
   @ApiOperation({
     summary: 'List orders',
-    description: 'Lists orders with optional filtering',
-  })
-  @ApiQuery({
-    name: 'status',
-    required: false,
-    description: 'Filter by order status',
-    enum: OrderStatus,
-    example: OrderStatus.CONFIRMED,
-  })
-  @ApiQuery({
-    name: 'fromDate',
-    required: false,
-    description: 'Filter orders from date (ISO format)',
-    example: '',
-    type: 'string',
-    format: 'date-time',
-  })
-  @ApiQuery({
-    name: 'toDate',
-    required: false,
-    description: 'Filter orders to date (ISO format)',
-    example: '',
-    type: 'string',
-    format: 'date-time',
+    description: 'Lists orders with optional filtering and pagination',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -235,16 +216,9 @@ export class OrderController {
   })
   async listOrders(
     @CurrentUserId() userId: string,
-    @Query('status') status?: string,
-    @Query('fromDate') fromDate?: string,
-    @Query('toDate') toDate?: string,
+    @Query() query: ListOrdersQueryDto,
   ) {
-    const filters = {
-      status,
-      fromDate,
-      toDate,
-    };
-    return this.orderService.listOrders(userId, filters);
+    return this.orderService.listOrders(userId, query);
   }
 
   @Patch(':orderNumber/assign')
@@ -350,38 +324,6 @@ export class OrderController {
     return this.orderService.getAssignmentStatus(orderNumber, userId);
   }
 
-  @Get('dashboard/officer-workloads')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  @ApiOperation({
-    summary: 'Get officer workload dashboard (Admin only)',
-    description: 'Shows current workload for all procurement officers',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Officer workloads retrieved successfully',
-    type: [OfficerWorkloadDto],
-  })
-  async getOfficerWorkloads(
-    @CurrentUserId() userId: string,
-  ): Promise<OfficerWorkloadDto[]> {
-    return this.orderService.getOfficerWorkloads();
-  }
-
-  @Get('dashboard/manual-intervention')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  @ApiOperation({
-    summary: 'Get orders needing manual intervention (Admin only)',
-    description:
-      'Shows orders that have reached maximum auto-reassignment attempts and need manual assignment',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Orders needing manual intervention retrieved successfully',
-  })
-  async getOrdersNeedingManualIntervention(@CurrentUserId() userId: string) {
-    return this.orderService.getOrdersNeedingManualIntervention();
-  }
-
   // Procurement Officer Availability Management
   @Put('procurement-officer/availability')
   @ApiOperation({
@@ -434,36 +376,100 @@ export class OrderController {
   }
 
   @Post('webhook/monnify')
+  @Public() // Skip authentication for webhook endpoints
   @ApiOperation({
     summary: 'Monnify payment webhook',
-    description: 'Handles Monnify payment notifications',
+    description:
+      'Handles Monnify payment notifications with signature verification',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Webhook processed successfully',
+    type: WebhookResponseDto,
   })
-  async handleMonnifyWebhook(@Body() webhookData: any) {
-    this.logger.log(
-      'Received Monnify webhook:',
-      JSON.stringify(webhookData, null, 2),
-    );
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Invalid webhook signature or data',
+  })
+  async handleMonnifyWebhook(
+    @Body() webhookData: any,
+    @Headers('monnify-signature') signature: string,
+    @Req() request: any,
+  ): Promise<WebhookResponseDto> {
+    // Log webhook receipt immediately
+    this.logger.log(`Received Monnify webhook: ${webhookData.eventType}`, {
+      transactionReference: webhookData.eventData?.transactionReference,
+      clientIP: request.ip || request.connection?.remoteAddress,
+    });
 
-    // Verify webhook signature
     try {
-      const isValid = await this.monnifyService.verifyWebhook(webhookData);
-      if (!isValid) {
-        this.logger.warn('Invalid Monnify webhook signature');
+      // Step 1: Validate IP address (Best Practice #2)
+      const clientIP =
+        request.ip ||
+        request.connection?.remoteAddress ||
+        request.headers['x-forwarded-for'];
+      const isValidIP = await this.monnifyService.validateWebhookIP(clientIP);
+
+      if (!isValidIP) {
+        this.logger.warn(`Webhook rejected: Invalid IP ${clientIP}`);
+        throw new BadRequestException('Unauthorized IP address');
+      }
+
+      // Step 2: Verify webhook signature (Best Practice #1)
+      const isValidSignature = await this.monnifyService.verifyWebhook(
+        webhookData,
+        signature,
+      );
+      if (!isValidSignature) {
+        this.logger.warn('Webhook rejected: Invalid signature');
         throw new BadRequestException('Invalid webhook signature');
       }
 
-      return this.orderService.handleMonnifyWebhook(webhookData);
+      // Step 3: Immediately respond with 200 (Best Practice #4)
+      // We'll process asynchronously to avoid timeouts
+      const processingPromise = this.orderService
+        .handleMonnifyWebhook(webhookData)
+        .catch((error) => {
+          this.logger.error(
+            'Async webhook processing failed:',
+            error.message,
+            error.stack,
+          );
+        });
+
+      // Don't await - respond immediately to prevent timeout
+      setImmediate(() => {
+        processingPromise;
+      });
+
+      return {
+        success: true,
+        message: 'Webhook received and processing initiated',
+        data: {
+          eventType: webhookData.eventType,
+          transactionReference: webhookData.eventData?.transactionReference,
+          timestamp: new Date().toISOString(),
+        },
+      };
     } catch (error) {
       this.logger.error(
-        'Failed to process Monnify webhook:',
+        'Webhook processing error:',
         error.message,
         error.stack,
       );
-      throw new BadRequestException('Failed to process webhook');
+
+      // Still return 200 to prevent retries for validation errors
+      if (
+        error.message.includes('Invalid webhook signature') ||
+        error.message.includes('Unauthorized IP')
+      ) {
+        return {
+          success: false,
+          message: error.message,
+        };
+      }
+
+      throw error;
     }
   }
 }

@@ -65,10 +65,29 @@ export class OrderService {
     if (userRole === UserRole.ADMIN || userRole === UserRole.SUPER_ADMIN) {
       if (!createOrderDto.wholesalerId) {
         throw new BadRequestException(
-          'Admin must specify wholesaler ID when creating order',
+          'Admin must specify wholesaler user ID when creating order',
         );
       }
-      targetWholesalerId = createOrderDto.wholesalerId;
+
+      // For admins, validate that the provided ID is a wholesaler user
+      const wholesalerUser = await this.prismaService.user.findUnique({
+        where: { id: createOrderDto.wholesalerId },
+        include: { wholesalerProfile: true },
+      });
+
+      if (!wholesalerUser) {
+        throw new NotFoundException('Wholesaler user not found');
+      }
+
+      if (wholesalerUser.role !== UserRole.WHOLESALER) {
+        throw new BadRequestException('Provided user ID is not a wholesaler');
+      }
+
+      if (!wholesalerUser.wholesalerProfile) {
+        throw new NotFoundException('Wholesaler profile not found for user');
+      }
+
+      targetWholesalerId = wholesalerUser.wholesalerProfile.id;
     } else if (userRole === UserRole.WHOLESALER) {
       // For wholesalers, find their wholesaler record using userId
       const wholesalerProfile = await this.prismaService.wholesaler.findUnique({
@@ -81,7 +100,7 @@ export class OrderService {
 
       if (
         createOrderDto.wholesalerId &&
-        createOrderDto.wholesalerId !== wholesalerProfile.id
+        createOrderDto.wholesalerId !== userId
       ) {
         throw new ForbiddenException(
           'Wholesaler can only create orders for themselves',
@@ -218,21 +237,25 @@ export class OrderService {
       );
 
       return {
-        order: {
-          id: order.id,
-          orderNumber: order.orderNumber,
-          totalAmount: Number(order.totalAmount),
-          status: order.status,
+        success: true,
+        message: 'Order created successfully',
+        data: {
+          order: {
+            id: order.id,
+            orderNumber: order.orderNumber,
+            totalAmount: Number(order.totalAmount),
+            status: order.status,
+          },
+          virtualAccounts: order.virtualAccounts as Array<{
+            accountNumber: string;
+            accountName: string;
+            bankCode: string;
+            bankName: string;
+          }>,
+          checkoutUrl: order.checkoutUrl || '',
+          expiryDate: order.paymentExpiresAt?.toISOString() || '',
+          invoiceReference: order.monnifyInvoiceRef || '',
         },
-        virtualAccounts: order.virtualAccounts as Array<{
-          accountNumber: string;
-          accountName: string;
-          bankCode: string;
-          bankName: string;
-        }>,
-        checkoutUrl: order.checkoutUrl || '',
-        expiryDate: order.paymentExpiresAt?.toISOString() || '',
-        invoiceReference: order.monnifyInvoiceRef || '',
       };
     } catch (error) {
       this.logger.error(
@@ -290,14 +313,8 @@ export class OrderService {
       if (order.wholesalerId !== wholesalerProfile.id) {
         throw new ForbiddenException('You can only verify your own orders');
       }
-    } else if (userRole === UserRole.PROCUREMENT_OFFICER) {
-      // Procurement officers can only verify payment for orders assigned to them
-      if (order.assignedProcurementOfficerId !== userId) {
-        throw new ForbiddenException(
-          'You can only verify payment for orders assigned to you',
-        );
-      }
     }
+    // Procurement officers can verify any order (removed assignment restriction)
 
     try {
       // Use the orderNumber as the invoice reference, not the monnify transaction ref
@@ -314,7 +331,19 @@ export class OrderService {
 
         if (!existingPayment) {
           // Record the payment
-          await this.recordPayment(order.id, invoiceStatus.responseBody);
+          await this.prismaService.payment.create({
+            data: {
+              orderId: order.id,
+              amount: invoiceStatus.responseBody.amountPaid,
+              paymentMethod: this.mapMonnifyPaymentMethod(
+                invoiceStatus.responseBody.paymentMethod,
+              ),
+              status: PaymentStatus.COMPLETED,
+              monnifyInvoiceRef:
+                invoiceStatus.responseBody.transactionReference,
+              paidAt: new Date(),
+            },
+          });
 
           // Update order status
           await this.prismaService.order.update({
@@ -428,6 +457,20 @@ export class OrderService {
       );
     }
 
+    // Validate status enum before proceeding
+    if (!Object.values(OrderItemStatus).includes(updateDto.status)) {
+      throw new BadRequestException(
+        `Invalid status value. Must be one of: ${Object.values(OrderItemStatus).join(', ')}`,
+      );
+    }
+
+    // Prevent status modification for draft orders (payment hasn't been made)
+    if (orderItem.order.status === OrderStatus.DRAFT) {
+      throw new BadRequestException(
+        'Cannot modify order item status for draft orders. Payment must be completed first.',
+      );
+    }
+
     const updatedItem = await this.prismaService.orderItem.update({
       where: { id: itemId },
       data: {
@@ -504,6 +547,13 @@ export class OrderService {
       order.createdById !== user.id
     ) {
       throw new ForbiddenException('Access denied to this order');
+    }
+
+    // Prevent bulk status modification for draft orders (payment hasn't been made)
+    if (order.status === OrderStatus.DRAFT) {
+      throw new BadRequestException(
+        'Cannot modify order item status for draft orders. Payment must be completed first.',
+      );
     }
 
     // Get all requested items to validate they exist and belong to this order
@@ -622,11 +672,14 @@ export class OrderService {
     const failureCount = results.filter((result) => !result.success).length;
 
     return {
+      success: true,
       message: `Bulk update completed: ${successCount} successful, ${failureCount} failed`,
-      totalItems: bulkUpdateDto.items.length,
-      successCount,
-      failureCount,
-      results,
+      data: {
+        totalItems: bulkUpdateDto.items.length,
+        successCount,
+        failureCount,
+        results,
+      },
     };
   }
 
@@ -672,6 +725,14 @@ export class OrderService {
             },
           },
         },
+        assignedProcurementOfficer: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
         payments: {
           where: { status: PaymentStatus.COMPLETED },
         },
@@ -708,13 +769,22 @@ export class OrderService {
       }
     }
 
-    return order;
+    return {
+      success: true,
+      message: 'Order details retrieved successfully',
+      data: {
+        ...order,
+        procurementOfficerName: order.assignedProcurementOfficer
+          ? `${order.assignedProcurementOfficer.firstName} ${order.assignedProcurementOfficer.lastName}`
+          : null,
+      },
+    };
   }
 
   /**
-   * List orders with filtering
+   * List orders with filtering and pagination
    */
-  async listOrders(userId: string, filters: any = {}) {
+  async listOrders(userId: string, queryDto: any = {}) {
     // Get user and their role
     const user = await this.prismaService.user.findUnique({
       where: { id: userId },
@@ -727,6 +797,11 @@ export class OrderService {
 
     const userRole = user.role;
     const where: any = {};
+
+    // Set pagination defaults
+    const page = queryDto.page || 1;
+    const limit = queryDto.limit || 10;
+    const offset = (page - 1) * limit;
 
     // Apply role-based filtering
     if (userRole === UserRole.WHOLESALER) {
@@ -741,22 +816,28 @@ export class OrderService {
 
       where.wholesalerId = wholesalerProfile.id;
     } else if (userRole === UserRole.PROCUREMENT_OFFICER) {
-      // Procurement officers can only see orders assigned to them
+      // Procurement officers can see orders assigned to them
       where.assignedProcurementOfficerId = userId;
     }
 
     // Apply additional filters
-    if (filters.status) {
-      where.status = filters.status;
+    if (queryDto.status) {
+      where.status = queryDto.status;
     }
 
-    if (filters.fromDate) {
-      where.createdAt = { ...where.createdAt, gte: new Date(filters.fromDate) };
+    if (queryDto.fromDate) {
+      where.createdAt = {
+        ...where.createdAt,
+        gte: new Date(queryDto.fromDate),
+      };
     }
 
-    if (filters.toDate) {
-      where.createdAt = { ...where.createdAt, lte: new Date(filters.toDate) };
+    if (queryDto.toDate) {
+      where.createdAt = { ...where.createdAt, lte: new Date(queryDto.toDate) };
     }
+
+    // Get total count for pagination
+    const totalCount = await this.prismaService.order.count({ where });
 
     const orders = await this.prismaService.order.findMany({
       where,
@@ -774,6 +855,13 @@ export class OrderService {
             },
           },
         },
+        assignedProcurementOfficer: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
         items: {
           select: {
             id: true,
@@ -785,111 +873,293 @@ export class OrderService {
         },
       },
       orderBy: { createdAt: 'desc' },
+      skip: offset,
+      take: limit,
     });
 
-    return orders;
+    // Transform orders to include PO name
+    const transformedOrders = orders.map((order) => ({
+      ...order,
+      procurementOfficerName: order.assignedProcurementOfficer
+        ? `${order.assignedProcurementOfficer.firstName} ${order.assignedProcurementOfficer.lastName}`
+        : null,
+    }));
+
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return {
+      success: true,
+      message: 'Orders retrieved successfully',
+      data: {
+        orders: transformedOrders,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalCount,
+          limit,
+          hasNext: page < totalPages,
+          hasPrev: page > 1,
+        },
+      },
+    };
   }
 
   /**
-   * Handle Monnify webhook
+   * Handle Monnify webhook with proper duplicate prevention and processing
    */
   async handleMonnifyWebhook(webhookData: any) {
+    // Basic validation
+    if (!webhookData.eventType || !webhookData.eventData) {
+      this.logger.error('Invalid webhook data: missing eventType or eventData');
+      return {
+        success: false,
+        message: 'Invalid webhook data structure',
+      };
+    }
+
+    const { eventType, eventData } = webhookData;
+    const transactionReference = eventData?.transactionReference;
+
+    if (!transactionReference) {
+      this.logger.error('Webhook missing transactionReference');
+      return {
+        success: false,
+        message: 'Invalid webhook data - missing transaction reference',
+      };
+    }
+
     this.logger.log(
-      `Processing Monnify webhook for transaction: ${webhookData.transactionReference}`,
+      `Processing Monnify webhook: ${eventType} for transaction: ${transactionReference}`,
     );
 
+    // Step 1: Check for duplicate webhook processing using existing payment records
+    const existingPayment = await this.prismaService.payment.findFirst({
+      where: {
+        monnifyInvoiceRef: transactionReference,
+        status: PaymentStatus.COMPLETED,
+      },
+    });
+
+    if (existingPayment) {
+      this.logger.log(
+        `Duplicate webhook detected for transaction: ${transactionReference}. Already processed.`,
+      );
+      return {
+        success: true,
+        message: 'Webhook already processed',
+        processed: false,
+      };
+    }
+
+    try {
+      // Process the webhook based on event type
+      let result;
+
+      switch (eventType) {
+        case 'SUCCESSFUL_TRANSACTION':
+          result = await this.processSuccessfulTransaction(eventData);
+          break;
+        case 'FAILED_TRANSACTION':
+          result = await this.processFailedTransaction(eventData);
+          break;
+        case 'SUCCESSFUL_REFUND':
+          result = await this.processRefund(eventData);
+          break;
+        default:
+          this.logger.warn(`Unhandled webhook event type: ${eventType}`);
+          result = {
+            success: true,
+            message: `Event type ${eventType} received but not processed`,
+          };
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Failed to process webhook for transaction ${transactionReference}:`,
+        error.message,
+        error.stack,
+      );
+
+      throw error;
+    }
+  }
+
+  /**
+   * Process successful transaction webhook
+   */
+  private async processSuccessfulTransaction(eventData: any) {
+    // Validate required fields
+    if (!eventData.paymentReference || !eventData.transactionReference) {
+      this.logger.error(
+        'Missing required webhook fields: paymentReference or transactionReference',
+      );
+      return { success: false, message: 'Missing required webhook fields' };
+    }
+
+    const orderNumber = eventData.paymentReference; // This is the order number
+    const transactionReference = eventData.transactionReference; // This is Monnify's transaction ID
+
     const order = await this.prismaService.order.findFirst({
-      where: { monnifyInvoiceRef: webhookData.transactionReference },
+      where: { orderNumber: orderNumber },
     });
 
     if (!order) {
       this.logger.warn(
-        `Order not found for Monnify transaction: ${webhookData.transactionReference}`,
+        `Order not found for order number: ${orderNumber} (Monnify transaction: ${transactionReference})`,
       );
       return { success: false, message: 'Order not found' };
     }
 
-    if (webhookData.paymentStatus === 'PAID') {
-      // Check if payment already processed
-      const existingPayment = await this.prismaService.payment.findFirst({
-        where: {
+    // Check if payment already processed to prevent double processing
+    const existingPayment = await this.prismaService.payment.findFirst({
+      where: {
+        orderId: order.id,
+        monnifyInvoiceRef: transactionReference,
+        status: PaymentStatus.COMPLETED,
+      },
+    });
+
+    if (existingPayment) {
+      this.logger.log(
+        `Payment already processed for order ${order.orderNumber}`,
+      );
+      return {
+        success: true,
+        message: 'Payment already processed',
+        processed: false,
+      };
+    }
+
+    // Process the payment
+    await this.prismaService.$transaction(async (tx) => {
+      // Record payment
+      await tx.payment.create({
+        data: {
           orderId: order.id,
-          monnifyInvoiceRef: webhookData.transactionReference,
+          amount: eventData.amountPaid || eventData.totalPayable || 0,
+          paymentMethod: this.mapMonnifyPaymentMethod(eventData.paymentMethod),
+          monnifyInvoiceRef: transactionReference,
           status: PaymentStatus.COMPLETED,
+          paidAt: new Date(eventData.paidOn),
         },
       });
 
-      if (!existingPayment) {
-        await this.prismaService.$transaction(async (tx) => {
-          // Record payment
-          await tx.payment.create({
-            data: {
-              orderId: order.id,
-              amount: webhookData.amountPaid,
-              paymentMethod: this.mapMonnifyPaymentMethod(
-                webhookData.paymentMethod,
-              ),
-              status: PaymentStatus.COMPLETED,
-              monnifyInvoiceRef: webhookData.transactionReference,
-              transactionRef: webhookData.transactionHash,
-              webhookData: webhookData,
-            },
-          });
+      // Update order status
+      await tx.order.update({
+        where: { id: order.id },
+        data: { status: OrderStatus.CONFIRMED },
+      });
+    });
 
-          // Update order status
-          await tx.order.update({
-            where: { id: order.id },
-            data: { status: OrderStatus.CONFIRMED },
-          });
-
-          // Auto-confirm order items
-          await tx.orderItem.updateMany({
-            where: {
-              orderId: order.id,
-              status: OrderItemStatus.PENDING,
-            },
-            data: {
-              status: OrderItemStatus.PAID,
-              statusUpdatedAt: new Date(),
-              statusUpdatedBy: 'system',
-            },
-          });
-        });
-
-        this.logger.log(
-          `Payment processed successfully for order ${order.orderNumber}`,
+    // Trigger auto-assignment if enabled (async - don't block webhook response)
+    setImmediate(async () => {
+      try {
+        const autoAssignEnabled =
+          this.configService.get('AUTO_ASSIGN_ENABLED', 'true') === 'true';
+        if (autoAssignEnabled) {
+          await this.autoAssignOrder(order.orderNumber, 'webhook-system');
+          this.logger.log(
+            `Auto-assignment triggered for order ${order.orderNumber}`,
+          );
+        }
+      } catch (autoAssignError) {
+        this.logger.error(
+          `Auto-assignment failed for order ${order.orderNumber}: ${autoAssignError.message}`,
         );
       }
+    });
+
+    this.logger.log(
+      `Payment processed successfully for order ${order.orderNumber}`,
+    );
+
+    return {
+      success: true,
+      message: 'Payment processed successfully',
+      data: {
+        orderNumber: order.orderNumber,
+        amount: eventData.amountPaid,
+        transactionReference: eventData.transactionReference,
+      },
+    };
+  }
+
+  /**
+   * Process failed transaction webhook
+   */
+  private async processFailedTransaction(eventData: any) {
+    const order = await this.prismaService.order.findFirst({
+      where: { monnifyInvoiceRef: eventData.transactionReference },
+    });
+
+    if (!order) {
+      this.logger.warn(
+        `Order not found for failed transaction: ${eventData.transactionReference}`,
+      );
+      return { success: false, message: 'Order not found' };
     }
 
-    return { success: true, message: 'Webhook processed successfully' };
-  }
-
-  private async recordPayment(orderId: string, invoiceData: any) {
-    return this.prismaService.payment.create({
+    // Log the failed payment attempt
+    await this.prismaService.payment.create({
       data: {
-        orderId,
-        amount: invoiceData.amountPaid,
-        paymentMethod: this.mapMonnifyPaymentMethod(invoiceData.paymentMethod),
-        status: PaymentStatus.COMPLETED,
-        monnifyInvoiceRef: invoiceData.transactionReference,
-        transactionRef: invoiceData.transactionHash,
-        webhookData: invoiceData,
+        orderId: order.id,
+        amount: eventData.amountPaid || 0,
+        paymentMethod: this.mapMonnifyPaymentMethod(eventData.paymentMethod),
+        monnifyInvoiceRef: eventData.transactionReference,
+        status: PaymentStatus.FAILED,
       },
     });
+
+    this.logger.log(`Failed payment recorded for order ${order.orderNumber}`);
+
+    return {
+      success: true,
+      message: 'Failed payment recorded',
+      data: {
+        orderNumber: order.orderNumber,
+        transactionReference: eventData.transactionReference,
+      },
+    };
   }
 
+  /**
+   * Process refund webhook
+   */
+  private async processRefund(eventData: any) {
+    // Handle refund processing
+    this.logger.log(
+      `Refund webhook received for transaction: ${eventData.transactionReference}`,
+    );
+
+    return {
+      success: true,
+      message: 'Refund webhook received',
+      data: {
+        transactionReference: eventData.transactionReference,
+      },
+    };
+  }
+
+  /**
+   * Map Monnify payment methods to our payment method enum
+   */
   private mapMonnifyPaymentMethod(monnifyMethod: string): PaymentMethod {
     switch (monnifyMethod) {
       case 'ACCOUNT_TRANSFER':
         return PaymentMethod.BANK_TRANSFER;
       case 'CARD':
         return PaymentMethod.CHECKOUT_URL;
+      case 'CASH':
+        return PaymentMethod.BANK_TRANSFER;
       default:
         return PaymentMethod.BANK_TRANSFER;
     }
   }
 
+  /**
+   * Generate unique order number
+   */
   private async generateOrderNumber(): Promise<string> {
     const prefix = 'JOO';
     const timestamp = Date.now().toString().slice(-8);
@@ -912,11 +1182,25 @@ export class OrderService {
 
     const items = order.items;
 
-    // Auto-transition to IN_PROGRESS when officer first updates any item (only if assignment accepted)
-    if (
-      order.status === OrderStatus.ASSIGNED &&
-      order.assignmentStatus === AssignmentStatus.ACCEPTED
-    ) {
+    // Auto-transition to IN_PROGRESS when any item status changes from PENDING
+    // (regardless of assignment acceptance status - admins can start working on items)
+    const hasNonPendingItems = items.some(
+      (item) => item.status !== OrderItemStatus.PENDING,
+    );
+
+    if (order.status === OrderStatus.CONFIRMED && hasNonPendingItems) {
+      await this.prismaService.order.update({
+        where: { id: orderId },
+        data: { status: OrderStatus.IN_PROGRESS },
+      });
+      this.logger.log(
+        `Order ${order.orderNumber} auto-transitioned to IN_PROGRESS (item status changed)`,
+      );
+      return;
+    }
+
+    // Also handle transition from ASSIGNED to IN_PROGRESS
+    if (order.status === OrderStatus.ASSIGNED && hasNonPendingItems) {
       await this.prismaService.order.update({
         where: { id: orderId },
         data: { status: OrderStatus.IN_PROGRESS },
@@ -997,19 +1281,50 @@ export class OrderService {
     const availableOfficer = await this.findMostAvailableOfficer();
 
     if (!availableOfficer) {
-      this.logger.warn('No available procurement officers for auto-assignment');
-      return null;
+      // Try to assign to any procurement officer (even unavailable ones)
+      const anyOfficer = await this.findAnyProcurementOfficer();
+
+      if (!anyOfficer) {
+        this.logger.warn('No procurement officers exist for auto-assignment');
+        return null;
+      }
+
+      // Assign to unavailable officer
+      const updatedOrder = await this.prismaService.order.update({
+        where: { orderNumber },
+        data: {
+          assignedProcurementOfficerId: anyOfficer.userId,
+          assignmentStatus: AssignmentStatus.PENDING_ACCEPTANCE,
+          assignedAt: new Date(),
+          assignmentNotes:
+            'Auto-assigned to unavailable officer due to no available officers',
+        },
+      });
+
+      this.logger.log(
+        `Order ${orderNumber} auto-assigned to unavailable officer ${anyOfficer.user.firstName} ${anyOfficer.user.lastName} (no available officers found)`,
+      );
+
+      return {
+        success: true,
+        message: 'Order auto-assigned successfully (no officers available)',
+        data: {
+          orderNumber: updatedOrder.orderNumber,
+          status: AssignmentStatus.PENDING_ACCEPTANCE,
+          procurementOfficerName: `${anyOfficer.user.firstName} ${anyOfficer.user.lastName}`,
+          assignedAt: updatedOrder.assignedAt!,
+        },
+      };
     }
 
     // Auto-assign the order
     const updatedOrder = await this.prismaService.order.update({
       where: { orderNumber },
       data: {
-        assignedProcurementOfficerId: availableOfficer.id,
+        assignedProcurementOfficerId: availableOfficer.userId,
         assignmentStatus: AssignmentStatus.PENDING_ACCEPTANCE,
         assignedAt: new Date(),
         assignmentNotes: 'Auto-assigned based on availability',
-        assignmentRespondedAt: null,
         assignmentResponseReason: null,
       },
     });
@@ -1019,11 +1334,15 @@ export class OrderService {
     );
 
     return {
-      orderNumber: updatedOrder.orderNumber,
-      status: AssignmentStatus.PENDING_ACCEPTANCE,
-      procurementOfficerName: `${availableOfficer.user.firstName} ${availableOfficer.user.lastName}`,
-      assignedAt: updatedOrder.assignedAt!,
-      assignmentNotes: updatedOrder.assignmentNotes || undefined,
+      success: true,
+      message: 'Order auto-assigned successfully',
+      data: {
+        orderNumber: updatedOrder.orderNumber,
+        status: AssignmentStatus.PENDING_ACCEPTANCE,
+        procurementOfficerName: `${availableOfficer.user.firstName} ${availableOfficer.user.lastName}`,
+        assignedAt: updatedOrder.assignedAt!,
+        assignmentNotes: updatedOrder.assignmentNotes || undefined,
+      },
     };
   }
 
@@ -1036,35 +1355,31 @@ export class OrderService {
       await this.prismaService.procurementOfficerProfile.findMany({
         include: {
           user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              status: true,
-            },
-          },
-          assignedOrders: {
-            where: {
-              status: {
-                in: [OrderStatus.ASSIGNED, OrderStatus.IN_PROGRESS],
-              },
-              assignmentStatus: {
-                in: [
-                  AssignmentStatus.PENDING_ACCEPTANCE,
-                  AssignmentStatus.ACCEPTED,
-                ],
+            include: {
+              assignedOrders: {
+                where: {
+                  status: {
+                    in: [OrderStatus.ASSIGNED, OrderStatus.IN_PROGRESS],
+                  },
+                  assignmentStatus: {
+                    in: [
+                      AssignmentStatus.PENDING_ACCEPTANCE,
+                      AssignmentStatus.ACCEPTED,
+                    ],
+                  },
+                },
+                select: { id: true },
               },
             },
-            select: { id: true },
           },
         },
         where: {
           user: {
             status: 'ACTIVE', // User account must be active
+            ...(excludeUserId && { id: { not: excludeUserId } }),
           },
           // Officer must be available for new assignments
           availabilityStatus: ProcurementOfficerStatus.AVAILABLE,
-          // Exclude the specified user if provided (by userId)
           ...(excludeUserId && {
             userId: {
               not: excludeUserId,
@@ -1079,7 +1394,7 @@ export class OrderService {
 
     // Filter officers who haven't exceeded their maximum active orders
     const availableOfficers = officers.filter((officer) => {
-      const activeOrders = officer.assignedOrders.length;
+      const activeOrders = officer.user.assignedOrders.length;
       const maxOrders = officer.maxActiveOrders || 5; // Default to 5 if not set
       return activeOrders < maxOrders;
     });
@@ -1094,10 +1409,64 @@ export class OrderService {
     // Calculate workload and find least busy officer
     const officersWithWorkload = availableOfficers.map((officer) => ({
       ...officer,
-      activeOrdersCount: officer.assignedOrders.length,
+      activeOrdersCount: officer.user.assignedOrders.length,
     }));
 
     // Sort by active orders count (ascending), then by user ID for consistency
+    officersWithWorkload.sort((a, b) => {
+      if (a.activeOrdersCount !== b.activeOrdersCount) {
+        return a.activeOrdersCount - b.activeOrdersCount;
+      }
+      return a.user.id.localeCompare(b.user.id);
+    });
+
+    return officersWithWorkload[0];
+  }
+
+  /**
+   * Find any procurement officer (including unavailable ones)
+   * Used as fallback when no available officers exist
+   */
+  private async findAnyProcurementOfficer() {
+    const officers =
+      await this.prismaService.procurementOfficerProfile.findMany({
+        include: {
+          user: {
+            include: {
+              assignedOrders: {
+                where: {
+                  status: {
+                    in: [OrderStatus.ASSIGNED, OrderStatus.IN_PROGRESS],
+                  },
+                  assignmentStatus: {
+                    in: [
+                      AssignmentStatus.PENDING_ACCEPTANCE,
+                      AssignmentStatus.ACCEPTED,
+                    ],
+                  },
+                },
+                select: { id: true },
+              },
+            },
+          },
+        },
+        where: {
+          user: {
+            status: 'ACTIVE', // User account must be active
+          },
+        },
+      });
+
+    if (officers.length === 0) {
+      return null;
+    }
+
+    // Sort by active orders count to pick the least busy one
+    const officersWithWorkload = officers.map((officer) => ({
+      ...officer,
+      activeOrdersCount: officer.user.assignedOrders.length,
+    }));
+
     officersWithWorkload.sort((a, b) => {
       if (a.activeOrdersCount !== b.activeOrdersCount) {
         return a.activeOrdersCount - b.activeOrdersCount;
@@ -1136,7 +1505,7 @@ export class OrderService {
       include: {
         payments: { where: { status: PaymentStatus.COMPLETED } },
         assignedProcurementOfficer: {
-          include: { user: { select: { firstName: true, lastName: true } } },
+          select: { firstName: true, lastName: true, id: true },
         },
       },
     });
@@ -1145,29 +1514,36 @@ export class OrderService {
       throw new NotFoundException('Order not found');
     }
 
-    // Validate order is ready for assignment (confirmed and paid)
-    if (order.status !== OrderStatus.CONFIRMED) {
-      throw new BadRequestException('Only confirmed orders can be assigned');
+    // Validate order is ready for assignment (any status except draft)
+    if (order.status === OrderStatus.DRAFT) {
+      throw new BadRequestException(
+        'Cannot assign draft orders. Payment must be completed first.',
+      );
     }
 
-    if (order.payments.length === 0) {
-      throw new BadRequestException('Order must be paid before assignment');
-    }
+    // Allow assignment even without payment for non-draft orders
+    // This enables reassignment of orders regardless of their current status
 
-    // Verify procurement officer exists
-    const procurementOfficer =
-      await this.prismaService.procurementOfficerProfile.findUnique({
-        where: { id: assignDto.procurementOfficerId },
-        include: {
-          user: { select: { firstName: true, lastName: true, status: true } },
-        },
-      });
+    // Verify procurement officer exists by user ID
+    const procurementOfficerUser = await this.prismaService.user.findUnique({
+      where: { id: assignDto.procurementOfficerId },
+      include: {
+        procurementOfficerProfile: true,
+      },
+    });
 
-    if (!procurementOfficer) {
+    if (
+      !procurementOfficerUser ||
+      !procurementOfficerUser.procurementOfficerProfile
+    ) {
       throw new NotFoundException('Procurement officer not found');
     }
 
-    if (procurementOfficer.user.status !== 'ACTIVE') {
+    if (procurementOfficerUser.role !== UserRole.PROCUREMENT_OFFICER) {
+      throw new BadRequestException('User is not a procurement officer');
+    }
+
+    if (procurementOfficerUser.status !== 'ACTIVE') {
       throw new BadRequestException(
         'Cannot assign to inactive procurement officer',
       );
@@ -1180,7 +1556,7 @@ export class OrderService {
     // For reassignment, log the change
     if (isReassignment && previousOfficer) {
       this.logger.log(
-        `Admin override: Order ${orderNumber} reassigned from ${previousOfficer.user.firstName} ${previousOfficer.user.lastName} to ${procurementOfficer.user.firstName} ${procurementOfficer.user.lastName} by admin ${admin.firstName} ${admin.lastName}`,
+        `Admin override: Order ${orderNumber} reassigned from ${previousOfficer.firstName} ${previousOfficer.lastName} to ${procurementOfficerUser.firstName} ${procurementOfficerUser.lastName} by admin ${admin.firstName} ${admin.lastName}`,
       );
     }
 
@@ -1207,17 +1583,23 @@ export class OrderService {
       : AssignmentStatus.PENDING_ACCEPTANCE;
 
     const logMessage = isReassignment
-      ? `Order ${orderNumber} reassigned to ${procurementOfficer.user.firstName} ${procurementOfficer.user.lastName} by admin ${admin.firstName} ${admin.lastName}`
-      : `Order ${orderNumber} assigned to ${procurementOfficer.user.firstName} ${procurementOfficer.user.lastName} by admin ${admin.firstName} ${admin.lastName}`;
+      ? `Order ${orderNumber} reassigned to ${procurementOfficerUser.firstName} ${procurementOfficerUser.lastName} by admin ${admin.firstName} ${admin.lastName}`
+      : `Order ${orderNumber} assigned to ${procurementOfficerUser.firstName} ${procurementOfficerUser.lastName} by admin ${admin.firstName} ${admin.lastName}`;
 
     this.logger.log(logMessage);
 
     return {
-      orderNumber: updatedOrder.orderNumber,
-      status: assignmentStatus,
-      procurementOfficerName: `${procurementOfficer.user.firstName} ${procurementOfficer.user.lastName}`,
-      assignedAt: updatedOrder.assignedAt!,
-      assignmentNotes: updatedOrder.assignmentNotes || undefined,
+      success: true,
+      message: isReassignment
+        ? 'Order reassigned successfully'
+        : 'Order assigned successfully',
+      data: {
+        orderNumber: updatedOrder.orderNumber,
+        status: assignmentStatus,
+        procurementOfficerName: `${procurementOfficerUser.firstName} ${procurementOfficerUser.lastName}`,
+        assignedAt: updatedOrder.assignedAt!,
+        assignmentNotes: updatedOrder.assignmentNotes || undefined,
+      },
     };
   }
 
@@ -1246,7 +1628,7 @@ export class OrderService {
       where: { orderNumber },
       include: {
         assignedProcurementOfficer: {
-          include: { user: { select: { firstName: true, lastName: true } } },
+          select: { firstName: true, lastName: true, id: true },
         },
       },
     });
@@ -1329,13 +1711,17 @@ export class OrderService {
     }
 
     return {
-      orderNumber: updatedOrder.orderNumber,
-      status: newAssignmentStatus,
-      procurementOfficerName: `${user.firstName} ${user.lastName}`,
-      assignedAt: updatedOrder.assignedAt!,
-      respondedAt: updatedOrder.assignmentRespondedAt!,
-      assignmentNotes: updatedOrder.assignmentNotes || undefined,
-      responseReason: updatedOrder.assignmentResponseReason || undefined,
+      success: true,
+      message: `Assignment ${responseDto.response.toLowerCase()}ed successfully`,
+      data: {
+        orderNumber: updatedOrder.orderNumber,
+        status: newAssignmentStatus,
+        procurementOfficerName: `${user.firstName} ${user.lastName}`,
+        assignedAt: updatedOrder.assignedAt!,
+        respondedAt: updatedOrder.assignmentRespondedAt!,
+        assignmentNotes: updatedOrder.assignmentNotes || undefined,
+        responseReason: updatedOrder.assignmentResponseReason || undefined,
+      },
     };
   }
 
@@ -1452,7 +1838,7 @@ export class OrderService {
       const updatedOrder = await this.prismaService.order.update({
         where: { orderNumber },
         data: {
-          assignedProcurementOfficerId: availableOfficer.id,
+          assignedProcurementOfficerId: availableOfficer.userId,
           assignmentStatus: AssignmentStatus.REASSIGNED,
           assignedAt: new Date(),
           assignmentNotes: `${order.assignmentNotes || ''} | Auto-reassigned after rejection (attempt ${rejectionCount + 1}/${maxReassignAttempts})`,
@@ -1497,7 +1883,7 @@ export class OrderService {
       where: { orderNumber },
       include: {
         assignedProcurementOfficer: {
-          include: { user: { select: { firstName: true, lastName: true } } },
+          select: { firstName: true, lastName: true, id: true },
         },
       },
     });
@@ -1522,123 +1908,18 @@ export class OrderService {
     }
 
     return {
-      orderNumber: order.orderNumber,
-      status: order.assignmentStatus || AssignmentStatus.UNASSIGNED,
-      procurementOfficerName: `${order.assignedProcurementOfficer.user.firstName} ${order.assignedProcurementOfficer.user.lastName}`,
-      assignedAt: order.assignedAt!,
-      respondedAt: order.assignmentRespondedAt || undefined,
-      assignmentNotes: order.assignmentNotes || undefined,
-      responseReason: order.assignmentResponseReason || undefined,
+      success: true,
+      message: 'Assignment status retrieved successfully',
+      data: {
+        orderNumber: order.orderNumber,
+        status: order.assignmentStatus || AssignmentStatus.UNASSIGNED,
+        procurementOfficerName: `${order.assignedProcurementOfficer.firstName} ${order.assignedProcurementOfficer.lastName}`,
+        assignedAt: order.assignedAt!,
+        respondedAt: order.assignmentRespondedAt || undefined,
+        assignmentNotes: order.assignmentNotes || undefined,
+        responseReason: order.assignmentResponseReason || undefined,
+      },
     };
-  }
-
-  /**
-   * Get workload dashboard for all procurement officers (Admin only)
-   */
-  async getOfficerWorkloads(): Promise<
-    Array<{
-      officerId: string;
-      officerName: string;
-      activeOrdersCount: number;
-      pendingOrdersCount: number;
-      status: string;
-    }>
-  > {
-    const officers =
-      await this.prismaService.procurementOfficerProfile.findMany({
-        include: {
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              status: true,
-            },
-          },
-          assignedOrders: {
-            where: {
-              assignmentStatus: {
-                in: [
-                  AssignmentStatus.PENDING_ACCEPTANCE,
-                  AssignmentStatus.ACCEPTED,
-                  AssignmentStatus.REASSIGNED,
-                ],
-              },
-            },
-            select: {
-              id: true,
-              status: true,
-              assignmentStatus: true,
-            },
-          },
-        },
-      });
-
-    return officers.map((officer) => {
-      const activeOrders = officer.assignedOrders.filter(
-        (order) =>
-          order.assignmentStatus === AssignmentStatus.ACCEPTED &&
-          (order.status === OrderStatus.ASSIGNED ||
-            order.status === OrderStatus.IN_PROGRESS),
-      );
-
-      const pendingOrders = officer.assignedOrders.filter(
-        (order) =>
-          order.assignmentStatus === AssignmentStatus.PENDING_ACCEPTANCE ||
-          order.assignmentStatus === AssignmentStatus.REASSIGNED,
-      );
-
-      return {
-        officerId: officer.id,
-        officerName: `${officer.user.firstName} ${officer.user.lastName}`,
-        activeOrdersCount: activeOrders.length,
-        pendingOrdersCount: pendingOrders.length,
-        status: officer.user.status,
-      };
-    });
-  }
-
-  /**
-   * Get orders that need manual intervention (Admin only)
-   * Returns orders that have reached maximum auto-reassignment attempts
-   */
-  async getOrdersNeedingManualIntervention(): Promise<
-    Array<{
-      orderNumber: string;
-      wholesalerName: string;
-      totalAmount: number;
-      assignmentNotes: string;
-      createdAt: Date;
-    }>
-  > {
-    const orders = await this.prismaService.order.findMany({
-      where: {
-        assignmentStatus: AssignmentStatus.REJECTED,
-        assignmentNotes: {
-          contains: 'Manual assignment required',
-        },
-      },
-      include: {
-        wholesaler: {
-          include: {
-            user: {
-              select: { firstName: true, lastName: true },
-            },
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-
-    return orders.map((order) => ({
-      orderNumber: order.orderNumber,
-      wholesalerName: `${order.wholesaler.user.firstName} ${order.wholesaler.user.lastName}`,
-      totalAmount: Number(order.totalAmount),
-      assignmentNotes: order.assignmentNotes || '',
-      createdAt: order.createdAt,
-    }));
   }
 
   /**
@@ -1681,21 +1962,24 @@ export class OrderService {
         },
         include: {
           user: {
-            select: { firstName: true, lastName: true },
-          },
-          assignedOrders: {
-            where: {
-              status: {
-                in: [OrderStatus.ASSIGNED, OrderStatus.IN_PROGRESS],
-              },
-              assignmentStatus: {
-                in: [
-                  AssignmentStatus.PENDING_ACCEPTANCE,
-                  AssignmentStatus.ACCEPTED,
-                ],
+            select: {
+              firstName: true,
+              lastName: true,
+              assignedOrders: {
+                where: {
+                  status: {
+                    in: [OrderStatus.ASSIGNED, OrderStatus.IN_PROGRESS],
+                  },
+                  assignmentStatus: {
+                    in: [
+                      AssignmentStatus.PENDING_ACCEPTANCE,
+                      AssignmentStatus.ACCEPTED,
+                    ],
+                  },
+                },
+                select: { id: true },
               },
             },
-            select: { id: true },
           },
         },
       });
@@ -1708,7 +1992,7 @@ export class OrderService {
       officerId: updatedProfile.id,
       officerName: `${updatedProfile.user.firstName} ${updatedProfile.user.lastName}`,
       availabilityStatus: updatedProfile.availabilityStatus,
-      activeOrdersCount: updatedProfile.assignedOrders.length,
+      activeOrdersCount: updatedProfile.user.assignedOrders.length,
       maxActiveOrders: updatedProfile.maxActiveOrders,
       updatedAt: updatedProfile.updatedAt,
     };
@@ -1724,21 +2008,12 @@ export class OrderService {
         where: { userId },
         include: {
           user: {
-            select: { firstName: true, lastName: true, role: true },
-          },
-          assignedOrders: {
-            where: {
-              status: {
-                in: [OrderStatus.ASSIGNED, OrderStatus.IN_PROGRESS],
-              },
-              assignmentStatus: {
-                in: [
-                  AssignmentStatus.PENDING_ACCEPTANCE,
-                  AssignmentStatus.ACCEPTED,
-                ],
-              },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              role: true,
             },
-            select: { id: true },
           },
         },
       });
@@ -1747,13 +2022,34 @@ export class OrderService {
       throw new NotFoundException('Procurement officer profile not found');
     }
 
+    // Get active orders count separately
+    const activeOrdersCount = await this.prismaService.order.count({
+      where: {
+        assignedProcurementOfficerId: userId,
+        status: {
+          in: [OrderStatus.ASSIGNED, OrderStatus.IN_PROGRESS],
+        },
+        assignmentStatus: {
+          in: [AssignmentStatus.PENDING_ACCEPTANCE, AssignmentStatus.ACCEPTED],
+        },
+      },
+    });
+
+    if (!officerProfile) {
+      throw new NotFoundException('Procurement officer profile not found');
+    }
+
     return {
-      officerId: officerProfile.id,
-      officerName: `${officerProfile.user.firstName} ${officerProfile.user.lastName}`,
-      availabilityStatus: officerProfile.availabilityStatus,
-      activeOrdersCount: officerProfile.assignedOrders.length,
-      maxActiveOrders: officerProfile.maxActiveOrders,
-      updatedAt: officerProfile.updatedAt,
+      success: true,
+      message: 'Officer availability retrieved successfully',
+      data: {
+        officerId: officerProfile.id,
+        officerName: `${officerProfile.user.firstName} ${officerProfile.user.lastName}`,
+        availabilityStatus: officerProfile.availabilityStatus,
+        activeOrdersCount: activeOrdersCount,
+        maxActiveOrders: officerProfile.maxActiveOrders,
+        updatedAt: officerProfile.updatedAt,
+      },
     };
   }
 
@@ -1765,33 +2061,59 @@ export class OrderService {
       await this.prismaService.procurementOfficerProfile.findMany({
         include: {
           user: {
-            select: { firstName: true, lastName: true, role: true },
-          },
-          assignedOrders: {
-            where: {
-              status: {
-                in: [OrderStatus.ASSIGNED, OrderStatus.IN_PROGRESS],
-              },
-              assignmentStatus: {
-                in: [
-                  AssignmentStatus.PENDING_ACCEPTANCE,
-                  AssignmentStatus.ACCEPTED,
-                ],
-              },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              role: true,
             },
-            select: { id: true },
           },
         },
       });
 
-    return officerProfiles.map((profile) => ({
-      userId: profile.userId,
-      officerId: profile.id,
-      officerName: `${profile.user.firstName} ${profile.user.lastName}`,
-      availabilityStatus: profile.availabilityStatus,
-      activeOrdersCount: profile.assignedOrders.length,
-      maxActiveOrders: profile.maxActiveOrders,
-      updatedAt: profile.updatedAt,
-    }));
+    // Get active and pending orders count for each officer
+    const officersWithCounts = await Promise.all(
+      officerProfiles.map(async (profile) => {
+        const [activeOrdersCount, pendingOrdersCount] = await Promise.all([
+          this.prismaService.order.count({
+            where: {
+              assignedProcurementOfficerId: profile.userId,
+              assignmentStatus: AssignmentStatus.ACCEPTED,
+              status: {
+                in: [OrderStatus.ASSIGNED, OrderStatus.IN_PROGRESS],
+              },
+            },
+          }),
+          this.prismaService.order.count({
+            where: {
+              assignedProcurementOfficerId: profile.userId,
+              assignmentStatus: {
+                in: [
+                  AssignmentStatus.PENDING_ACCEPTANCE,
+                  AssignmentStatus.REASSIGNED,
+                ],
+              },
+            },
+          }),
+        ]);
+
+        return {
+          userId: profile.userId,
+          officerId: profile.id,
+          officerName: `${profile.user.firstName} ${profile.user.lastName}`,
+          availabilityStatus: profile.availabilityStatus,
+          activeOrdersCount: activeOrdersCount,
+          pendingOrdersCount: pendingOrdersCount,
+          maxActiveOrders: profile.maxActiveOrders,
+          updatedAt: profile.updatedAt,
+        };
+      }),
+    );
+
+    return {
+      success: true,
+      message: 'All officers availability retrieved successfully',
+      data: officersWithCounts,
+    };
   }
 }
