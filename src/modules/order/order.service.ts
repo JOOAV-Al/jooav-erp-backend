@@ -2246,6 +2246,14 @@ export class OrderService {
       }),
     ]);
 
+    // Get total revenue from completed orders
+    const completedOrdersRevenue = await this.prismaService.order.aggregate({
+      where: { ...where, status: OrderStatus.COMPLETED },
+      _sum: {
+        totalAmount: true,
+      },
+    });
+
     const [
       draftCount,
       confirmedCount,
@@ -2256,12 +2264,18 @@ export class OrderService {
     ] = statusCounts;
 
     const totalOrders = statusCounts.reduce((sum, count) => sum + count, 0);
+    const totalRevenue = Number(completedOrdersRevenue._sum.totalAmount) || 0;
+
+    // Calculate percentages
+    const calculatePercentage = (count: number) =>
+      totalOrders > 0 ? Math.round((count / totalOrders) * 100) : 0;
 
     return {
       success: true,
       message: 'Order statistics retrieved successfully',
       data: {
         totalOrders,
+        totalRevenue, // Total money from completed orders
         statusBreakdown: {
           draft: draftCount,
           confirmed: confirmedCount,
@@ -2271,10 +2285,10 @@ export class OrderService {
           cancelled: cancelledCount,
         },
         summary: {
-          activeOrders:
-            draftCount + confirmedCount + assignedCount + inProgressCount,
+          activeOrders: confirmedCount + assignedCount + inProgressCount,
           completedOrders: completedCount,
           cancelledOrders: cancelledCount,
+          totalRevenue, // Also include in summary
         },
       },
     };
