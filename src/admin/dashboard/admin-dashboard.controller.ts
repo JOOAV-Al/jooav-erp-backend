@@ -1,5 +1,10 @@
 import { Controller, Get, HttpStatus, UseGuards } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { UnifiedAuthGuard } from '../../common/guards/unified-auth.guard';
 import { RolesGuard } from '../../modules/auth/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -15,6 +20,7 @@ export class AdminDashboardController {
   constructor(private readonly orderService: OrderService) {}
 
   @Get()
+  @ApiBearerAuth('admin-access-token')
   @ApiOperation({
     summary: 'Get admin dashboard data',
     description:

@@ -129,7 +129,6 @@ export class OrderService {
       // For admins, validate that the provided ID is a wholesaler user
       const wholesalerUser = await this.prismaService.user.findUnique({
         where: { id: createOrderDto.wholesalerId },
-        include: { wholesalerProfile: true },
       });
 
       if (!wholesalerUser) {
@@ -140,21 +139,9 @@ export class OrderService {
         throw new BadRequestException('Provided user ID is not a wholesaler');
       }
 
-      if (!wholesalerUser.wholesalerProfile) {
-        throw new NotFoundException('Wholesaler profile not found for user');
-      }
-
-      targetWholesalerId = wholesalerUser.wholesalerProfile.id;
+      targetWholesalerId = createOrderDto.wholesalerId; // Use user ID directly
     } else if (userRole === UserRole.WHOLESALER) {
-      // For wholesalers, find their wholesaler record using userId
-      const wholesalerProfile = await this.prismaService.wholesaler.findUnique({
-        where: { userId: userId },
-      });
-
-      if (!wholesalerProfile) {
-        throw new NotFoundException('Wholesaler profile not found for user');
-      }
-
+      // For wholesalers, use their user ID directly
       if (
         createOrderDto.wholesalerId &&
         createOrderDto.wholesalerId !== userId
@@ -163,7 +150,7 @@ export class OrderService {
           'Wholesaler can only create orders for themselves',
         );
       }
-      targetWholesalerId = wholesalerProfile.id;
+      targetWholesalerId = userId; // Use user ID directly
     } else {
       throw new ForbiddenException(
         'Only admins and wholesalers can create orders',
@@ -171,13 +158,12 @@ export class OrderService {
     }
 
     // Validate wholesaler exists
-    const wholesaler = await this.prismaService.wholesaler.findUnique({
+    const wholesaler = await this.prismaService.user.findUnique({
       where: { id: targetWholesalerId },
-      include: { user: true },
     });
 
-    if (!wholesaler) {
-      throw new NotFoundException('Wholesaler not found');
+    if (!wholesaler || wholesaler.role !== UserRole.WHOLESALER) {
+      throw new NotFoundException('Wholesaler user not found');
     }
 
     // Handle items (can be empty for draft orders)
@@ -350,11 +336,7 @@ export class OrderService {
 
     // Validate permissions to initiate payment
     if (user.role === UserRole.WHOLESALER) {
-      const wholesalerProfile = await this.prismaService.wholesaler.findUnique({
-        where: { userId: userId },
-      });
-
-      if (!wholesalerProfile || order.wholesalerId !== wholesalerProfile.id) {
+      if (order.wholesalerId !== userId) {
         throw new ForbiddenException(
           'You can only initiate payment for your own orders',
         );
@@ -568,11 +550,7 @@ export class OrderService {
 
     // Validate permissions
     if (user.role === UserRole.WHOLESALER) {
-      const wholesalerProfile = await this.prismaService.wholesaler.findUnique({
-        where: { userId: userId },
-      });
-
-      if (!wholesalerProfile || order.wholesalerId !== wholesalerProfile.id) {
+      if (order.wholesalerId !== userId) {
         throw new ForbiddenException(
           'You can only reinitiate payment for your own orders',
         );
@@ -740,16 +718,7 @@ export class OrderService {
 
     // Check permissions
     if (userRole === UserRole.WHOLESALER) {
-      // Find the wholesaler profile for this user
-      const wholesalerProfile = await this.prismaService.wholesaler.findUnique({
-        where: { userId: userId },
-      });
-
-      if (!wholesalerProfile) {
-        throw new NotFoundException('Wholesaler profile not found for user');
-      }
-
-      if (order.wholesalerId !== wholesalerProfile.id) {
+      if (order.wholesalerId !== userId) {
         throw new ForbiddenException('You can only verify your own orders');
       }
     }
@@ -2737,16 +2706,7 @@ export class OrderService {
 
     // Apply role-based filtering
     if (userRole === UserRole.WHOLESALER) {
-      // Find the wholesaler profile for this user
-      const wholesalerProfile = await this.prismaService.wholesaler.findUnique({
-        where: { userId: userId },
-      });
-
-      if (!wholesalerProfile) {
-        throw new NotFoundException('Wholesaler profile not found for user');
-      }
-
-      where.wholesalerId = wholesalerProfile.id;
+      where.wholesalerId = userId;
     } else if (userRole === UserRole.PROCUREMENT_OFFICER) {
       // Procurement officers can see orders assigned to them
       where.assignedProcurementOfficerId = userId;
@@ -3133,11 +3093,7 @@ export class OrderService {
 
     // Validate user has permission to edit this order
     if (user.role === UserRole.WHOLESALER) {
-      const wholesalerProfile = await this.prismaService.wholesaler.findUnique({
-        where: { userId: userId },
-      });
-
-      if (!wholesalerProfile || order.wholesalerId !== wholesalerProfile.id) {
+      if (order.wholesalerId !== userId) {
         throw new ForbiddenException('You can only edit your own orders');
       }
     }
@@ -3172,13 +3128,13 @@ export class OrderService {
 
     // Validate wholesalerId if provided
     if (updateOrderDto.wholesalerId) {
-      const wholesaler = await this.prismaService.wholesaler.findUnique({
+      const wholesaler = await this.prismaService.user.findUnique({
         where: { id: updateOrderDto.wholesalerId },
       });
 
-      if (!wholesaler) {
+      if (!wholesaler || wholesaler.role !== UserRole.WHOLESALER) {
         throw new BadRequestException(
-          `Wholesaler with ID ${updateOrderDto.wholesalerId} not found`,
+          `Wholesaler user with ID ${updateOrderDto.wholesalerId} not found`,
         );
       }
     }
