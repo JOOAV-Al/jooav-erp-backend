@@ -203,9 +203,28 @@ export class OrderService {
         );
       }
 
-      // Calculate total amount for draft (no inventory validation yet)
+      // Calculate total amount and validate quantities
       orderItemsData = items.map((item) => {
         const product = products.find((p) => p.id === item.productId);
+
+        if (!product) {
+          throw new BadRequestException(`Product ${item.productId} not found`);
+        }
+
+        // Validate quantity against product stock
+        if (item.quantity > product.quantity) {
+          throw new BadRequestException(
+            `Insufficient stock for product ${product.name}. Available: ${product.quantity}, Requested: ${item.quantity}`,
+          );
+        }
+
+        // Validate minimum quantity
+        if (item.quantity < 10) {
+          throw new BadRequestException(
+            `Minimum quantity is 10 for product ${product.name}. Requested: ${item.quantity}`,
+          );
+        }
+
         const itemTotal =
           item.quantity * Number(item.unitPrice || product?.price || 0);
         totalAmount += itemTotal;
@@ -252,14 +271,9 @@ export class OrderService {
           wholesaler: {
             select: {
               id: true,
-              user: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  email: true,
-                },
-              },
+              firstName: true,
+              lastName: true,
+              email: true,
             },
           },
         },
@@ -310,7 +324,12 @@ export class OrderService {
           },
         },
         wholesaler: {
-          include: { user: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
         },
       },
     });
@@ -415,8 +434,8 @@ export class OrderService {
       const invoiceData = {
         amount: totalAmount,
         invoiceReference: paymentOrderNumber,
-        customerName: `${order.wholesaler.user.firstName} ${order.wholesaler.user.lastName}`,
-        customerEmail: order.wholesaler.user.email,
+        customerName: `${order.wholesaler.firstName} ${order.wholesaler.lastName}`,
+        customerEmail: order.wholesaler.email,
         description: `Payment for Order ${paymentOrderNumber}`,
         contractCode: this.configService.get('MONNIFY_CONTRACT_CODE'),
         currencyCode: 'NGN',
@@ -523,7 +542,12 @@ export class OrderService {
           },
         },
         wholesaler: {
-          include: { user: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
         },
       },
     });
@@ -662,7 +686,12 @@ export class OrderService {
             },
           },
           wholesaler: {
-            include: { user: true },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
           },
         },
       });
@@ -1271,15 +1300,10 @@ export class OrderService {
         wholesaler: {
           select: {
             id: true,
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                phone: true,
-              },
-            },
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
           },
         },
         assignedProcurementOfficer: {
@@ -1305,16 +1329,7 @@ export class OrderService {
 
     // Check permissions
     if (userRole === UserRole.WHOLESALER) {
-      // Find the wholesaler profile for this user
-      const wholesalerProfile = await this.prismaService.wholesaler.findUnique({
-        where: { userId: userId },
-      });
-
-      if (!wholesalerProfile) {
-        throw new NotFoundException('Wholesaler profile not found for user');
-      }
-
-      if (order.wholesalerId !== wholesalerProfile.id) {
+      if (order.wholesalerId !== userId) {
         throw new ForbiddenException('You can only view your own orders');
       }
     } else if (userRole === UserRole.PROCUREMENT_OFFICER) {
@@ -1362,16 +1377,7 @@ export class OrderService {
 
     // Apply role-based filtering
     if (userRole === UserRole.WHOLESALER) {
-      // Find the wholesaler profile for this user
-      const wholesalerProfile = await this.prismaService.wholesaler.findUnique({
-        where: { userId: userId },
-      });
-
-      if (!wholesalerProfile) {
-        throw new NotFoundException('Wholesaler profile not found for user');
-      }
-
-      where.wholesalerId = wholesalerProfile.id;
+      where.wholesalerId = userId;
     } else if (userRole === UserRole.PROCUREMENT_OFFICER) {
       // Procurement officers can see orders assigned to them
       where.assignedProcurementOfficerId = userId;
@@ -1394,14 +1400,9 @@ export class OrderService {
         wholesaler: {
           select: {
             id: true,
-            user: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
+            firstName: true,
+            lastName: true,
+            email: true,
           },
         },
         assignedProcurementOfficer: {
@@ -2858,7 +2859,10 @@ export class OrderService {
         },
         wholesaler: {
           select: {
-            userId: true,
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
           },
         },
       },
@@ -2882,7 +2886,7 @@ export class OrderService {
         );
       }
 
-      if (order.wholesaler.userId !== userId) {
+      if (order.wholesalerId !== userId) {
         throw new ForbiddenException('You can only cancel your own orders');
       }
     } else if (!isAdmin && !isProcurementOfficer) {
@@ -3059,6 +3063,7 @@ export class OrderService {
 
   /**
    * Update order with role-based permissions (DRAFT orders only)
+   * Handles single item update along with other order fields
    */
   async updateOrder(
     orderNumber: string,
@@ -3086,7 +3091,14 @@ export class OrderService {
             },
           },
         },
-        wholesaler: { include: { user: true } },
+        wholesaler: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
       },
     });
 
@@ -3101,17 +3113,17 @@ export class OrderService {
 
     // Define role-based edit permissions
     const editPermissions = {
-      [UserRole.WHOLESALER]: ['items', 'deliveryAddress'],
-      [UserRole.PROCUREMENT_OFFICER]: ['items', 'deliveryAddress'],
+      [UserRole.WHOLESALER]: ['item', 'deliveryAddress'],
+      [UserRole.PROCUREMENT_OFFICER]: ['item', 'deliveryAddress'],
       [UserRole.ADMIN]: [
-        'items',
+        'item',
         'deliveryAddress',
         'customerNotes',
         'wholesalerId',
         'assignedProcurementOfficerId',
       ],
       [UserRole.SUPER_ADMIN]: [
-        'items',
+        'item',
         'deliveryAddress',
         'customerNotes',
         'wholesalerId',
@@ -3142,64 +3154,131 @@ export class OrderService {
       }
     }
 
+    // Validate assignedProcurementOfficerId if provided
+    if (updateOrderDto.assignedProcurementOfficerId) {
+      const procurementOfficer = await this.prismaService.user.findUnique({
+        where: {
+          id: updateOrderDto.assignedProcurementOfficerId,
+          role: UserRole.PROCUREMENT_OFFICER,
+        },
+      });
+
+      if (!procurementOfficer) {
+        throw new BadRequestException(
+          `Procurement officer with ID ${updateOrderDto.assignedProcurementOfficerId} not found`,
+        );
+      }
+    }
+
+    // Validate wholesalerId if provided
+    if (updateOrderDto.wholesalerId) {
+      const wholesaler = await this.prismaService.wholesaler.findUnique({
+        where: { id: updateOrderDto.wholesalerId },
+      });
+
+      if (!wholesaler) {
+        throw new BadRequestException(
+          `Wholesaler with ID ${updateOrderDto.wholesalerId} not found`,
+        );
+      }
+    }
+
     try {
-      let recalculateNeeded = false;
-      const inventoryAdjustments: {
-        productId: string;
-        quantityDelta: number;
-      }[] = [];
-
       const result = await this.prismaService.$transaction(async (tx) => {
-        let updatedOrder = order;
+        let needsRecalculation = false;
+        const orderUpdateData: any = {
+          updatedAt: new Date(),
+        };
 
-        // Handle item updates if provided
-        if (updateOrderDto.items && Array.isArray(updateOrderDto.items)) {
-          recalculateNeeded = true;
+        // Handle item modification if provided
+        if (updateOrderDto.item) {
+          const itemData = updateOrderDto.item;
 
-          for (const itemUpdate of updateOrderDto.items) {
-            if (itemUpdate.action === 'UPDATE' && itemUpdate.itemId) {
-              // Update existing item quantity
-              const existingItem = order.items.find(
-                (item) => item.id === itemUpdate.itemId,
-              );
-              if (existingItem && itemUpdate.quantity !== undefined) {
-                // Validate minimum quantity
-                if (itemUpdate.quantity < 10) {
-                  throw new BadRequestException(
-                    `Minimum quantity is 10. Requested: ${itemUpdate.quantity}`,
-                  );
-                }
+          // Validate action is provided
+          if (!itemData.action) {
+            throw new BadRequestException(
+              'Action is required when updating an item',
+            );
+          }
 
-                const quantityDelta =
-                  itemUpdate.quantity - existingItem.quantity;
+          needsRecalculation = true;
 
-                // For draft orders, no need to check inventory since it's not reserved yet
-                // Update item quantity and recalculate line total
-                const currentPrice =
-                  existingItem.product.price || existingItem.unitPrice;
-                await tx.orderItem.update({
-                  where: { id: itemUpdate.itemId },
-                  data: {
-                    quantity: itemUpdate.quantity,
-                    unitPrice: currentPrice, // Update with current price
-                    lineTotal: itemUpdate.quantity * Number(currentPrice),
-                  },
-                });
+          switch (itemData.action) {
+            case 'UPDATE':
+              if (!itemData.itemId) {
+                throw new BadRequestException(
+                  'Item ID is required for UPDATE action',
+                );
               }
-            } else if (itemUpdate.action === 'ADD' && itemUpdate.productId) {
-              // Check if product already exists in order (prevent duplicates)
+              if (itemData.quantity === undefined) {
+                throw new BadRequestException(
+                  'Quantity is required for UPDATE action',
+                );
+              }
+
+              // Find the specific item to update
               const existingItem = order.items.find(
-                (item) => item.productId === itemUpdate.productId,
+                (item) => item.id === itemData.itemId,
               );
-              if (existingItem) {
+
+              if (!existingItem) {
+                throw new NotFoundException(
+                  `Order item ${itemData.itemId} not found in order`,
+                );
+              }
+
+              // Validate minimum quantity
+              if (itemData.quantity < 10) {
+                throw new BadRequestException(
+                  `Minimum quantity is 10. Requested: ${itemData.quantity}`,
+                );
+              }
+
+              // Validate quantity against product stock
+              if (itemData.quantity > existingItem.product.quantity) {
+                throw new BadRequestException(
+                  `Insufficient stock for product ${existingItem.product.name}. Available: ${existingItem.product.quantity}, Requested: ${itemData.quantity}`,
+                );
+              }
+
+              // Update the item quantity and recalculate line total
+              const currentPrice =
+                existingItem.product.price || existingItem.unitPrice;
+              await tx.orderItem.update({
+                where: { id: itemData.itemId },
+                data: {
+                  quantity: itemData.quantity,
+                  unitPrice: currentPrice,
+                  lineTotal: itemData.quantity * Number(currentPrice),
+                },
+              });
+              break;
+
+            case 'ADD':
+              if (!itemData.productId) {
+                throw new BadRequestException(
+                  'Product ID is required for ADD action',
+                );
+              }
+              if (itemData.quantity === undefined) {
+                throw new BadRequestException(
+                  'Quantity is required for ADD action',
+                );
+              }
+
+              // Check if product already exists in order
+              const duplicateItem = order.items.find(
+                (item) => item.productId === itemData.productId,
+              );
+              if (duplicateItem) {
                 throw new BadRequestException(
                   'Product already exists in order. Use UPDATE action instead.',
                 );
               }
 
-              // Add new item to order
+              // Validate product exists and is available
               const product = await tx.product.findUnique({
-                where: { id: itemUpdate.productId },
+                where: { id: itemData.productId },
                 select: {
                   id: true,
                   name: true,
@@ -3211,7 +3290,7 @@ export class OrderService {
 
               if (!product) {
                 throw new BadRequestException(
-                  `Product ${itemUpdate.productId} not found`,
+                  `Product ${itemData.productId} not found`,
                 );
               }
 
@@ -3222,41 +3301,67 @@ export class OrderService {
               }
 
               // Validate minimum quantity
-              if (itemUpdate.quantity < 10) {
+              if (itemData.quantity < 10) {
                 throw new BadRequestException(
-                  `Minimum quantity is 10. Requested: ${itemUpdate.quantity}`,
+                  `Minimum quantity is 10. Requested: ${itemData.quantity}`,
                 );
               }
 
-              const currentPrice = product.price || 0;
+              // Validate quantity against product stock
+              if (itemData.quantity > product.quantity) {
+                throw new BadRequestException(
+                  `Insufficient stock for product ${product.name}. Available: ${product.quantity}, Requested: ${itemData.quantity}`,
+                );
+              }
+
+              // Create new order item
+              const productPrice = product.price || 0;
               await tx.orderItem.create({
                 data: {
                   orderId: order.id,
-                  productId: itemUpdate.productId,
-                  quantity: itemUpdate.quantity,
-                  unitPrice: currentPrice,
-                  lineTotal: itemUpdate.quantity * Number(currentPrice),
+                  productId: itemData.productId,
+                  quantity: itemData.quantity,
+                  unitPrice: productPrice,
+                  lineTotal: itemData.quantity * Number(productPrice),
                   status: OrderItemStatus.PENDING,
                   statusUpdatedBy: userId,
                 },
               });
-            } else if (itemUpdate.action === 'REMOVE' && itemUpdate.itemId) {
-              // Remove item from order
-              const existingItem = order.items.find(
-                (item) => item.id === itemUpdate.itemId,
-              );
-              if (existingItem) {
-                await tx.orderItem.delete({
-                  where: { id: itemUpdate.itemId },
-                });
+              break;
+
+            case 'REMOVE':
+              if (!itemData.itemId) {
+                throw new BadRequestException(
+                  'Item ID is required for REMOVE action',
+                );
               }
-            }
+
+              // Find the item to remove
+              const itemToRemove = order.items.find(
+                (item) => item.id === itemData.itemId,
+              );
+
+              if (!itemToRemove) {
+                throw new NotFoundException(
+                  `Order item ${itemData.itemId} not found in order`,
+                );
+              }
+
+              // Delete the item
+              await tx.orderItem.delete({
+                where: { id: itemData.itemId },
+              });
+              break;
+
+            default:
+              throw new BadRequestException(
+                `Invalid action: ${itemData.action}. Must be ADD, UPDATE, or REMOVE.`,
+              );
           }
         }
 
-        // Recalculate order totals if items were modified
-        if (recalculateNeeded) {
-          // Get updated items to recalculate totals
+        // If item was modified, recalculate order totals
+        if (needsRecalculation) {
           const updatedItems = await tx.orderItem.findMany({
             where: { orderId: order.id },
           });
@@ -3265,67 +3370,21 @@ export class OrderService {
             (sum, item) => sum + Number(item.lineTotal),
             0,
           );
-          const newTotalAmount = newSubtotal;
 
-          updatedOrder = await tx.order.update({
-            where: { id: order.id },
-            data: {
-              subtotal: newSubtotal,
-              totalAmount: newTotalAmount,
-              updatedAt: new Date(),
-            },
-            include: {
-              items: {
-                include: {
-                  product: {
-                    select: {
-                      id: true,
-                      name: true,
-                      price: true,
-                      quantity: true,
-                    },
-                  },
-                },
-              },
-              wholesaler: { include: { user: true } },
-            },
-          });
+          orderUpdateData.subtotal = newSubtotal;
+          orderUpdateData.totalAmount = newSubtotal;
         }
 
-        // Handle other field updates (non-items)
-        const { items, ...otherUpdates } = updateOrderDto;
+        // Add other field updates (excluding item)
+        const { item, ...otherUpdates } = updateOrderDto;
         if (Object.keys(otherUpdates).length > 0) {
-          updatedOrder = await tx.order.update({
-            where: { id: order.id },
-            data: {
-              ...otherUpdates,
-              updatedAt: new Date(),
-            },
-            include: {
-              items: {
-                include: {
-                  product: {
-                    select: {
-                      id: true,
-                      name: true,
-                      price: true,
-                      quantity: true,
-                    },
-                  },
-                },
-              },
-              wholesaler: {
-                include: {
-                  user: true,
-                },
-              },
-            },
-          });
+          Object.assign(orderUpdateData, otherUpdates);
         }
 
-        // Always fetch the final order state to ensure all item updates are reflected
-        const finalOrder = await tx.order.findUnique({
+        // Update the order with all changes
+        const updatedOrder = await tx.order.update({
           where: { id: order.id },
+          data: orderUpdateData,
           include: {
             items: {
               include: {
@@ -3340,63 +3399,54 @@ export class OrderService {
               },
             },
             wholesaler: {
-              include: {
-                user: true,
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
               },
             },
           },
         });
 
-        return finalOrder || updatedOrder;
+        return updatedOrder;
       });
 
-      // Create comprehensive audit log of changes
+      // Create audit log
       const auditLog = {
         orderNumber,
         updatedBy: `${user.firstName} ${user.lastName} (${user.role})`,
         timestamp: new Date().toISOString(),
         changes: {
-          itemModifications: updateOrderDto.items
+          itemModification: updateOrderDto.item
             ? {
-                totalItemChanges: updateOrderDto.items.length,
-                actions: updateOrderDto.items.map((item) => ({
-                  action: item.action,
-                  itemId: item.itemId || 'new',
-                  productId: item.productId,
-                  quantity: item.quantity,
-                })),
+                action: updateOrderDto.item.action,
+                itemId: updateOrderDto.item.itemId || 'new',
+                productId: updateOrderDto.item.productId,
+                quantity: updateOrderDto.item.quantity,
               }
             : null,
           fieldUpdates:
-            Object.keys(updateOrderDto).filter((key) => key !== 'items')
-              .length > 0
+            Object.keys(updateOrderDto).filter((key) => key !== 'item').length >
+            0
               ? Object.keys(updateOrderDto)
-                  .filter((key) => key !== 'items')
+                  .filter((key) => key !== 'item')
                   .reduce((changes, key) => {
                     changes[key] = { newValue: updateOrderDto[key] };
                     return changes;
                   }, {})
               : null,
-          inventoryAdjustments:
-            inventoryAdjustments.length > 0
-              ? inventoryAdjustments.map((adj) => ({
-                  productId: adj.productId,
-                  quantityChange: adj.quantityDelta,
-                  action: adj.quantityDelta > 0 ? 'RELEASED' : 'RESERVED',
-                }))
-              : null,
-          totalsRecalculated: recalculateNeeded,
         },
       };
 
       this.logger.log(
-        `Order ${orderNumber} updated - Field-level audit:`,
+        `Order ${orderNumber} updated:`,
         JSON.stringify(auditLog, null, 2),
       );
 
       return {
         success: true,
-        message: 'Order updated successfully',
+        message: `Order updated successfully${updateOrderDto.item ? ` - Item ${updateOrderDto.item.action}ED` : ''}`,
         data: {
           order: result,
           audit: auditLog,
