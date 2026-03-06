@@ -3462,6 +3462,159 @@ export class OrderService {
   }
 
   /**
+   * Get admin dashboard data
+   * Returns active orders, recent users, and statistics
+   */
+  async getDashboard(userId: string) {
+    // Get user and validate admin permissions
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: { id: true, role: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const userRole = user.role;
+    if (userRole !== UserRole.ADMIN && userRole !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException('Only admins can access dashboard');
+    }
+
+    // Execute all queries in parallel for better performance
+    const [
+      activeOrders,
+      recentUsers,
+      totalRevenue,
+      completedOrdersCount,
+      liveProductsCount,
+      allOrdersCount,
+    ] = await Promise.all([
+      // 1. Get active orders (confirmed status upwards, excluding pending_payment)
+      this.prismaService.order.findMany({
+        where: {
+          status: {
+            in: [
+              OrderStatus.CONFIRMED,
+              OrderStatus.ASSIGNED,
+              OrderStatus.IN_PROGRESS,
+            ],
+          },
+        },
+        include: {
+          items: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  thumbnail: true,
+                  images: true,
+                  brand: { select: { name: true } },
+                  packSize: { select: { name: true } },
+                  packType: { select: { name: true } },
+                  price: true,
+                  discount: true,
+                  variant: { select: { id: true, name: true } },
+                  subcategory: {
+                    select: {
+                      name: true,
+                      category: { select: { name: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          wholesaler: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          assignedProcurementOfficer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+
+      // 2. Get recent users based on admin role
+      this.prismaService.user.findMany({
+        where:
+          userRole === UserRole.SUPER_ADMIN
+            ? {} // Super admin sees all
+            : { role: { not: UserRole.SUPER_ADMIN } }, // Admin doesn't see super admins
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+          status: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+
+      // 3. Get total revenue from completed orders
+      this.prismaService.order.aggregate({
+        where: { status: OrderStatus.COMPLETED },
+        _sum: {
+          totalAmount: true,
+        },
+      }),
+
+      // 4. Get completed orders count
+      this.prismaService.order.count({
+        where: { status: OrderStatus.COMPLETED },
+      }),
+
+      // 5. Get live products count
+      this.prismaService.product.count({
+        where: {
+          status: 'LIVE',
+          deletedAt: null,
+        },
+      }),
+
+      // 6. Get all orders count
+      this.prismaService.order.count(),
+    ]);
+
+    // Transform active orders to include procurement officer names
+    const transformedActiveOrders = activeOrders.map((order) => ({
+      ...order,
+      procurementOfficerName: order.assignedProcurementOfficer
+        ? `${order.assignedProcurementOfficer.firstName} ${order.assignedProcurementOfficer.lastName}`
+        : null,
+    }));
+
+    return {
+      success: true,
+      message: 'Dashboard data retrieved successfully',
+      data: {
+        activeOrders: transformedActiveOrders,
+        recentUsers: recentUsers,
+        stats: {
+          totalRevenue: Number(totalRevenue._sum.totalAmount) || 0,
+          completedOrders: completedOrdersCount,
+          liveProducts: liveProductsCount,
+          allOrders: allOrdersCount,
+        },
+      },
+    };
+  }
+
+  /**
    * Reserve inventory for order items
    * Reduces product quantities when order is created
    */
